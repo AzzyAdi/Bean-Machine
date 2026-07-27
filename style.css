@@ -502,7 +502,7 @@ transition:.3s;
 
 .navbar{
 
-width:90%;
+width:95%;
 
 max-width:1400px;
 
@@ -598,9 +598,9 @@ gap:15px;
 
 .discord{
 
-background:#5865F2;
+background:#f26558;
 
-padding:12px 25px;
+padding:5px 10px;
 
 border-radius:50px;
 
