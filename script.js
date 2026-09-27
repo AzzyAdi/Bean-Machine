@@ -1346,36 +1346,48 @@ function renderEmployeeOfMonth(current, history) {
     if (!name) return;
 
     if (!current) {
-
         name.textContent = "Employee of the Month will be announced soon.";
         rank.textContent = "";
         message.textContent = "";
         highlight.textContent = "";
+        if (month) month.textContent = "";
+        if (photo) photo.src = "https://via.placeholder.com/500x500?text=Bean+Machine";
+        if (historyBox) historyBox.innerHTML = "";
         return;
-
     }
 
-    name.textContent = current.name || "Bean Machine Employee";
-    rank.textContent = current.rank || "";
-    message.textContent = current.message || "";
-    highlight.textContent = current.highlight || "";
-    month.textContent = current.month || "";
+    // Apps Script returns Google Sheet columns using their header names
+    // (Month, Name, Rank, Photo, Message, Highlight). Always read those
+    // fields explicitly instead of assuming lowercase JSON keys.
+    const currentName = bmField(current, "Name", "name");
+    const currentRank = bmField(current, "Rank", "rank");
+    const currentMessage = bmField(current, "Message", "message");
+    const currentHighlight = bmField(current, "Highlight", "highlight");
+    const currentMonth = bmField(current, "Month", "month");
+    const currentPhoto = bmField(current, "Photo", "photo");
 
-    if (current.photo && photo) {
-        photo.src = bmImageUrl(current.photo);
-        photo.onerror = () => { photo.src = "https://via.placeholder.com/500x500?text=Bean+Machine"; };
+    name.textContent = currentName || "Bean Machine Employee";
+    rank.textContent = currentRank || "";
+    message.textContent = currentMessage || "";
+    highlight.textContent = currentHighlight || "";
+    if (month) month.textContent = currentMonth || "";
+
+    if (photo) {
+        photo.src = bmImageUrl(currentPhoto);
+        photo.onerror = () => {
+            photo.onerror = null;
+            photo.src = "https://via.placeholder.com/500x500?text=Bean+Machine";
+        };
     }
 
     if (historyBox) {
-
         historyBox.innerHTML = (history || []).map(item => `
             <div class="history-card">
-                <small>${bmEscape(item.month)}</small>
-                <h4>${bmEscape(item.name)}</h4>
-                <p>${bmEscape(item.rank)}</p>
+                <small>${bmEscape(bmField(item, "Month", "month"))}</small>
+                <h4>${bmEscape(bmField(item, "Name", "name"))}</h4>
+                <p>${bmEscape(bmField(item, "Rank", "rank"))}</p>
             </div>
         `).join("");
-
     }
 
 }
@@ -1390,8 +1402,19 @@ function bmField(obj, ...keys) {
 function bmImageUrl(value) {
     let url = String(value || "").trim();
     if (!url) return "https://via.placeholder.com/600x600?text=Bean+Machine";
-    const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
-    if (drive) return `https://drive.google.com/thumbnail?id=${drive[1]}&sz=w1000`;
+
+    // Google Drive file links -> embeddable thumbnail URL.
+    const drivePatterns = [
+        /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([A-Za-z0-9_-]+)/,
+        /drive\.google\.com\/uc\?(?:[^#]*&)?id=([A-Za-z0-9_-]+)/,
+        /drive\.google\.com\/thumbnail\?id=([A-Za-z0-9_-]+)/
+    ];
+    for (const pattern of drivePatterns) {
+        const match = url.match(pattern);
+        if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+    }
+
     return url;
 }
 
@@ -1495,48 +1518,58 @@ function renderApprovedReviews(reviews) {
 function renderAnnouncements(items) {
 
     const box = document.getElementById("announcementsList");
-
     if (!box) return;
 
-    box.innerHTML = items.length ? items.map(item => `
-        <article class="update-card">
-            <span class="update-date">${bmEscape(item.date)}</span>
-            <h4>${bmEscape(item.title)}</h4>
-            <p>${bmEscape(bmField(item, "message", "Message"))}</p>
-        </article>
-    `).join("") : '<div class="live-empty">No announcements.</div>';
+    box.innerHTML = items.length ? items.map(item => {
+        const date = bmField(item, "Date", "date");
+        const title = bmField(item, "Title", "title");
+        const message = bmField(item, "Message", "message");
+        return `
+            <article class="update-card">
+                <span class="update-date">${bmEscape(date)}</span>
+                <h4>${bmEscape(title)}</h4>
+                <p>${bmEscape(message)}</p>
+            </article>
+        `;
+    }).join("") : '<div class="live-empty">No announcements.</div>';
 
 }
 
 function renderEvents(items) {
 
     const box = document.getElementById("eventsList");
-
     if (!box) return;
 
-    box.innerHTML = items.length ? items.map(item => `
-        <article class="update-card">
-            <span class="update-date">${bmEscape(item.date)}${item.time ? " • " + bmEscape(item.time) : ""}</span>
-            <h4>${bmEscape(item.title)}</h4>
-            <p>${bmEscape(item.location || "")}</p>
-            <p>${bmEscape(item.description || "")}</p>
-        </article>
-    `).join("") : '<div class="live-empty">No upcoming events.</div>';
+    box.innerHTML = items.length ? items.map(item => {
+        const date = bmField(item, "Date", "date");
+        const time = bmField(item, "Time", "time");
+        const title = bmField(item, "Title", "title");
+        const location = bmField(item, "Location", "location");
+        const description = bmField(item, "Description", "description");
+        return `
+            <article class="update-card">
+                <span class="update-date">${bmEscape(date)}${time ? " • " + bmEscape(time) : ""}</span>
+                <h4>${bmEscape(title)}</h4>
+                <p>${bmEscape(location)}</p>
+                <p>${bmEscape(description)}</p>
+            </article>
+        `;
+    }).join("") : '<div class="live-empty">No upcoming events.</div>';
 
 }
 
 function renderManagedMenu(items) {
     const box = document.querySelector("#menu .menu-grid");
     if (!box) return;
-    const managed = (items || []).filter(item => String(item.Active).toLowerCase() !== "false");
+    const managed = (items || []).filter(item => String(bmField(item, "Active", "active")).toLowerCase() !== "false");
     box.querySelectorAll(".managed-menu-card").forEach(card => card.remove());
     if (!managed.length) return;
     const fragment = managed.map(item => `
         <div class="menu-card managed-menu-card">
-            <img src="${bmEscape(bmImageUrl(item.image))}" alt="${bmEscape(item.name || "Bean Machine Menu Item")}">
-            <h3>${bmEscape(item.name || "Menu Item")}</h3>
-            <p>${bmEscape(item.description || "")}</p>
-            <span>${bmEscape(item.price || "")}</span>
+            <img src="${bmEscape(bmImageUrl(bmField(item, "Image", "image")))}" alt="${bmEscape(bmField(item, "Name", "name") || "Bean Machine Menu Item")}">
+            <h3>${bmEscape(bmField(item, "Name", "name") || "Menu Item")}</h3>
+            <p>${bmEscape(bmField(item, "Description", "description"))}</p>
+            <span>${bmEscape(bmField(item, "Price", "price"))}</span>
         </div>
     `).join("");
     box.insertAdjacentHTML("beforeend", fragment);
@@ -1545,18 +1578,17 @@ function renderManagedMenu(items) {
 function renderManagedGallery(items) {
     const box = document.querySelector("#gallery .gallery-grid");
     if (!box) return;
-    const managed = (items || []).filter(item => String(item.Active).toLowerCase() !== "false");
+    const managed = (items || []).filter(item => String(bmField(item, "Active", "active")).toLowerCase() !== "false");
     box.querySelectorAll(".managed-gallery-image").forEach(image => image.parentElement.remove());
     if (!managed.length) return;
     const fragment = managed.map(item => `
         <div class="managed-gallery-image-wrap">
-            <img class="managed-gallery-image" src="${bmEscape(bmImageUrl(item.image))}" alt="${bmEscape(item.title || "Bean Machine Gallery")}">
-            ${item.title ? `<span class="managed-gallery-caption">${bmEscape(item.title)}</span>` : ""}
+            <img class="managed-gallery-image" src="${bmEscape(bmImageUrl(bmField(item, "Image", "image")))}" alt="${bmEscape(bmField(item, "Title", "title") || "Bean Machine Gallery")}">
+            ${bmField(item, "Title", "title") ? `<span class="managed-gallery-caption">${bmEscape(bmField(item, "Title", "title"))}</span>` : ""}
         </div>
     `).join("");
     box.insertAdjacentHTML("beforeend", fragment);
 }
-
 
 function initReviewForm() {
 
@@ -2028,6 +2060,12 @@ function renderDashboardEmployees(employees, panel) {
 
 function renderDashboardContent(data, panel) {
 
+    const eomRows = data.employeeOfMonth || [];
+    const announcements = data.announcements || [];
+    const events = data.events || [];
+    const menu = data.menu || [];
+    const gallery = data.gallery || [];
+
     panel.innerHTML = `
         <h3>Employee of the Month</h3>
 
@@ -2035,11 +2073,27 @@ function renderDashboardContent(data, panel) {
             <input name="month" placeholder="Month e.g. September 2026" required>
             <input name="name" placeholder="Employee name" required>
             <input name="rank" placeholder="Rank">
-            <input name="photo" placeholder="Photo URL">
+            <input name="photo" placeholder="Photo URL or Google Drive link">
             <textarea name="message" placeholder="Award message"></textarea>
             <textarea name="highlight" placeholder="Highlight / reason"></textarea>
             <button type="submit">Set Employee of the Month</button>
         </form>
+
+        <div class="dashboard-table-wrap">
+            <table class="dashboard-table">
+                <thead><tr><th>Month</th><th>Name</th><th>Rank</th><th>Action</th></tr></thead>
+                <tbody>
+                    ${eomRows.length ? eomRows.map(item => `
+                        <tr>
+                            <td>${bmEscape(bmField(item, "Month", "month"))}</td>
+                            <td>${bmEscape(bmField(item, "Name", "name"))}</td>
+                            <td>${bmEscape(bmField(item, "Rank", "rank"))}</td>
+                            <td><button data-content-delete="delete_eom" data-id="${bmEscape(item._row)}">Delete</button></td>
+                        </tr>
+                    `).join("") : '<tr><td colspan="4">No Employee of the Month records.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
 
         <h3 style="margin-top:30px;">Announcements</h3>
 
@@ -2049,6 +2103,22 @@ function renderDashboardContent(data, panel) {
             <input name="date" placeholder="Date">
             <button type="submit">Publish Announcement</button>
         </form>
+
+        <div class="dashboard-table-wrap">
+            <table class="dashboard-table">
+                <thead><tr><th>Date</th><th>Title</th><th>Message</th><th>Action</th></tr></thead>
+                <tbody>
+                    ${announcements.length ? announcements.map(item => `
+                        <tr>
+                            <td>${bmEscape(bmField(item, "Date", "date"))}</td>
+                            <td>${bmEscape(bmField(item, "Title", "title"))}</td>
+                            <td>${bmEscape(bmField(item, "Message", "message"))}</td>
+                            <td><button data-content-delete="delete_announcement" data-id="${bmEscape(item._row)}">Delete</button></td>
+                        </tr>
+                    `).join("") : '<tr><td colspan="4">No announcements.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
 
         <h3 style="margin-top:30px;">Events</h3>
 
@@ -2060,6 +2130,23 @@ function renderDashboardContent(data, panel) {
             <textarea name="description" placeholder="Description"></textarea>
             <button type="submit">Add Event</button>
         </form>
+
+        <div class="dashboard-table-wrap">
+            <table class="dashboard-table">
+                <thead><tr><th>Date</th><th>Time</th><th>Title</th><th>Location</th><th>Action</th></tr></thead>
+                <tbody>
+                    ${events.length ? events.map(item => `
+                        <tr>
+                            <td>${bmEscape(bmField(item, "Date", "date"))}</td>
+                            <td>${bmEscape(bmField(item, "Time", "time"))}</td>
+                            <td>${bmEscape(bmField(item, "Title", "title"))}</td>
+                            <td>${bmEscape(bmField(item, "Location", "location"))}</td>
+                            <td><button data-content-delete="delete_event" data-id="${bmEscape(item._row)}">Delete</button></td>
+                        </tr>
+                    `).join("") : '<tr><td colspan="5">No events.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
 
         <h3 style="margin-top:30px;">Menu Item</h3>
 
@@ -2082,11 +2169,11 @@ function renderDashboardContent(data, panel) {
         <div class="dashboard-content-preview">
             <h3 style="margin-top:30px;">Current Content</h3>
             <div class="dashboard-card-grid">
-                <div class="dashboard-stat"><strong>${(data.employeeOfMonth || []).length}</strong><span>Employee of Month Records</span></div>
-                <div class="dashboard-stat"><strong>${(data.announcements || []).length}</strong><span>Announcements</span></div>
-                <div class="dashboard-stat"><strong>${(data.events || []).length}</strong><span>Events</span></div>
-                <div class="dashboard-stat"><strong>${(data.menu || []).length}</strong><span>Managed Menu Items</span></div>
-                <div class="dashboard-stat"><strong>${(data.gallery || []).length}</strong><span>Managed Gallery Images</span></div>
+                <div class="dashboard-stat"><strong>${eomRows.length}</strong><span>Employee of Month Records</span></div>
+                <div class="dashboard-stat"><strong>${announcements.length}</strong><span>Announcements</span></div>
+                <div class="dashboard-stat"><strong>${events.length}</strong><span>Events</span></div>
+                <div class="dashboard-stat"><strong>${menu.length}</strong><span>Managed Menu Items</span></div>
+                <div class="dashboard-stat"><strong>${gallery.length}</strong><span>Managed Gallery Images</span></div>
             </div>
         </div>
     `;
@@ -2096,6 +2183,26 @@ function renderDashboardContent(data, panel) {
     bindContentForm("eventForm", "save_event");
     bindContentForm("menuForm", "save_menu");
     bindContentForm("galleryForm", "save_gallery");
+
+    panel.querySelectorAll("[data-content-delete]").forEach(button => {
+        button.addEventListener("click", async () => {
+            const action = button.dataset.contentDelete;
+            if (!confirm("Delete this content permanently?")) return;
+            button.disabled = true;
+            try {
+                await bmAdminPost({
+                    action,
+                    pin: sessionStorage.getItem("beanMachineAdminPin"),
+                    row: button.dataset.id
+                });
+                await refreshManagementTab("content", document.getElementById("dashboardPanel"));
+                await refreshPublicLiveData();
+            } catch (error) {
+                alert(error.message || "Could not delete this content.");
+                button.disabled = false;
+            }
+        });
+    });
 
 }
 
