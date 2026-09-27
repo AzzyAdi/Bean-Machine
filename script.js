@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initRevealAnimation();
     initGalleryHover();
     initApplicationForm();
+    initSuccessPopup();
     initBeanMachineLiveSystem();
     initReviewForm();
     initManagementDashboard();
@@ -1064,6 +1065,16 @@ console.log(" Website Ready ");
 
 console.log("====================================");
 
+function initSuccessPopup() {
+    const popup = document.getElementById("popup");
+    const close = document.getElementById("closePopup");
+    if (!popup || !close) return;
+    close.addEventListener("click", () => popup.classList.remove("active"));
+    popup.addEventListener("click", (event) => {
+        if (event.target === popup) popup.classList.remove("active");
+    });
+}
+
 /*====================================
     DIRECT JOB APPLICATION
 ====================================*/
@@ -1323,6 +1334,21 @@ function renderEmployeeOfMonth(current, history) {
 
 }
 
+function bmField(obj, ...keys) {
+    for (const key of keys) {
+        if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
+    }
+    return "";
+}
+
+function bmImageUrl(value) {
+    let url = String(value || "").trim();
+    if (!url) return "https://via.placeholder.com/600x600?text=Bean+Machine";
+    const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
+    if (drive) return `https://drive.google.com/thumbnail?id=${drive[1]}&sz=w1000`;
+    return url;
+}
+
 function renderEmployees(employees) {
 
     const box = document.getElementById("employeeProfiles");
@@ -1336,19 +1362,19 @@ function renderEmployees(employees) {
 
     box.innerHTML = employees.map(employee => {
 
-        const rating = employee.rating
-            ? Number(employee.rating).toFixed(1)
+        const rating = bmField(employee, "rating", "Rating")
+            ? Number(bmField(employee, "rating", "Rating")).toFixed(1)
             : "0.0";
 
         return `
             <article class="profile-card">
-                <img src="${bmEscape(employee.photo || "https://via.placeholder.com/600x600?text=Bean+Machine")}"
-                     alt="${bmEscape(employee.name)}">
+                <img src="${bmEscape(bmImageUrl(bmField(employee, "photo", "Photo")))}"
+                     alt="${bmEscape(bmField(employee, "name", "Name"))}">
                 <div class="profile-card-content">
-                    <h3>${bmEscape(employee.name)}</h3>
-                    <p class="profile-rank">${bmEscape(employee.rank)}</p>
-                    <p>${bmEscape(employee.bio)}</p>
-                    <p class="profile-rating">${bmStars(Math.round(Number(employee.rating || 0)))} ${rating}/5</p>
+                    <h3>${bmEscape(bmField(employee, "name", "Name"))}</h3>
+                    <p class="profile-rank">${bmEscape(bmField(employee, "rank", "Rank"))}</p>
+                    <p>${bmEscape(bmField(employee, "bio", "Bio"))}</p>
+                    <p class="profile-rating">${bmStars(Math.round(Number(bmField(employee, "rating", "Rating") || 0)))} ${rating}/5</p>
                 </div>
             </article>
         `;
@@ -1366,7 +1392,7 @@ function populateReviewEmployees(employees) {
     select.innerHTML =
         '<option value="" selected disabled>Select an employee</option>' +
         employees.map(employee =>
-            `<option value="${bmEscape(employee.name)}">${bmEscape(employee.name)} — ${bmEscape(employee.rank)}</option>`
+            `<option value="${bmEscape(bmField(employee, "name", "Name"))}">${bmEscape(bmField(employee, "name", "Name"))} — ${bmEscape(bmField(employee, "rank", "Rank"))}</option>`
         ).join("");
 
 }
@@ -1570,7 +1596,8 @@ function initManagementDashboard() {
 
             window.BEAN_MACHINE_ADMIN_DATA = data;
 
-            renderDashboardApplications(data.applications || [], panel);
+            panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
+            setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
 
             dashboard.querySelectorAll(".dashboard-tabs button").forEach(button => {
 
@@ -1581,7 +1608,8 @@ function initManagementDashboard() {
 
                     button.classList.add("active");
 
-                    renderDashboardTab(button.dataset.tab, data, panel);
+                    panel.innerHTML = '<div class="live-loading">Loading...</div>';
+                    setTimeout(() => renderDashboardTab(button.dataset.tab, data, panel), 0);
 
                 };
 
@@ -1625,7 +1653,8 @@ function initManagementDashboard() {
             loginBox.hidden = true;
             dashboard.hidden = false;
 
-            renderDashboardApplications(data.applications || [], panel);
+            panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
+            setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
 
         } catch (error) {
 
@@ -1673,8 +1702,8 @@ function renderDashboardApplications(applications, panel) {
     panel.innerHTML = `
         <div class="dashboard-card-grid">
             <div class="dashboard-stat"><strong>${applications.length}</strong><span>Total Applications</span></div>
-            <div class="dashboard-stat"><strong>${applications.filter(x => x.status === "Pending" || !x.status).length}</strong><span>Pending</span></div>
-            <div class="dashboard-stat"><strong>${applications.filter(x => x.status === "Accepted").length}</strong><span>Accepted</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") || "Pending") === "Pending").length}</strong><span>Pending</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => bmField(x, "status", "Status") === "Accepted").length}</strong><span>Accepted</span></div>
         </div>
 
         <div class="dashboard-form">
@@ -1716,7 +1745,7 @@ function renderDashboardApplications(applications, panel) {
                             <td>${bmEscape(item.CID || item.cid)}<br>${bmEscape(item["Discord Username"] || item.discord)}</td>
                             <td>${bmEscape(item["Family Name"] || item.family)}</td>
                             <td>${bmEscape(item["Flexible Hours"] || item.flexibleHours)}</td>
-                            <td>${bmEscape(item.status || "Pending")}</td>
+                            <td>${bmEscape(bmField(item, "status", "Status") || "Pending")}</td>
                             <td>
                                 <div class="dashboard-action">
                                     <button data-app-action="Interview" data-id="${bmEscape(item._row)}">Interview</button>
@@ -1743,7 +1772,7 @@ function renderDashboardApplications(applications, panel) {
 
                 const target = applications.find(x => String(x._row) === String(button.dataset.id));
 
-                if (target) target.status = button.dataset.appAction;
+                if (target) { target.status = button.dataset.appAction; target.Status = button.dataset.appAction; }
 
                 draw();
 
@@ -1824,7 +1853,7 @@ function renderDashboardReviews(reviews, panel) {
 
                 const target = reviews.find(x => String(x._row) === String(button.dataset.id));
 
-                if (target) target.status = button.dataset.reviewAction;
+                if (target) { target.status = button.dataset.reviewAction; target.Status = button.dataset.reviewAction; }
 
                 draw();
 
@@ -1848,7 +1877,7 @@ function renderDashboardEmployees(employees, panel) {
         <form id="employeeForm" class="dashboard-form">
             <input name="name" placeholder="Employee name" required>
             <input name="rank" placeholder="Rank" required>
-            <input name="photo" placeholder="Photo URL" required>
+            <input name="photo" placeholder="Photo URL or Google Drive link" required>
             <textarea name="bio" placeholder="Employee bio"></textarea>
             <button type="submit">Save Employee</button>
         </form>
@@ -1861,9 +1890,9 @@ function renderDashboardEmployees(employees, panel) {
                 <tbody>
                     ${employees.map(item => `
                         <tr>
-                            <td>${bmEscape(item.name)}</td>
-                            <td>${bmEscape(item.rank)}</td>
-                            <td>${Number(item.rating || 0).toFixed(1)}</td>
+                            <td>${bmEscape(bmField(item, "name", "Name"))}</td>
+                            <td>${bmEscape(bmField(item, "rank", "Rank"))}</td>
+                            <td>${Number(bmField(item, "rating", "Rating") || 0).toFixed(1)}</td>
                             <td><button data-employee-row="${bmEscape(item._row)}">Delete</button></td>
                         </tr>
                     `).join("")}
@@ -1893,13 +1922,19 @@ function renderDashboardEmployees(employees, panel) {
 
         button.addEventListener("click", async () => {
 
-            await bmPost({
-                action: "delete_employee",
-                pin: sessionStorage.getItem("beanMachineAdminPin"),
-                row: button.dataset.employeeRow
-            });
-
-            button.closest("tr").remove();
+            if (!confirm("Delete this employee profile permanently?")) return;
+            try {
+                await bmPost({
+                    action: "delete_employee",
+                    pin: sessionStorage.getItem("beanMachineAdminPin"),
+                    row: button.dataset.employeeRow
+                });
+                const target = employees.find(x => String(x._row) === String(button.dataset.employeeRow));
+                if (target) target.Active = "false";
+                button.closest("tr").remove();
+            } catch (error) {
+                alert("Could not delete the employee. Please try again.");
+            }
 
         });
 
