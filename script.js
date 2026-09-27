@@ -1218,6 +1218,46 @@ async function bmPost(payload) {
     return { ok: true };
 }
 
+async function bmAdminPost(payload) {
+
+    const data = await bmGet("admin_mutation", payload);
+
+    if (!data || data.ok !== true) {
+        throw new Error((data && data.error) || "Management action failed.");
+    }
+
+    return data;
+}
+
+async function refreshManagementTab(tab, panel) {
+    const pin = sessionStorage.getItem("beanMachineAdminPin") || "";
+    const fresh = await bmGet("admin", { pin });
+    if (!fresh.ok) throw new Error(fresh.error || "Could not refresh management data.");
+    window.BEAN_MACHINE_ADMIN_DATA = fresh;
+    renderDashboardTab(tab, fresh, panel);
+    return fresh;
+}
+
+async function refreshPublicLiveData() {
+    try {
+        const data = await bmGet("public", { _t: Date.now() });
+        window.BEAN_MACHINE_PUBLIC_DATA = data;
+        renderEmployeeOfMonth(data.employeeOfMonth, data.employeeOfMonthHistory);
+        renderEmployees(data.employees || []);
+        renderReviewLeaderboard(data.reviewStats || []);
+        renderApprovedReviews(data.approvedReviews || []);
+        populateReviewEmployees(data.employees || []);
+        renderAnnouncements(data.announcements || []);
+        renderEvents(data.events || []);
+        renderManagedMenu(data.menu || []);
+        renderManagedGallery(data.gallery || []);
+        return data;
+    } catch (error) {
+        console.warn("Bean Machine live refresh:", error);
+        return null;
+    }
+}
+
 function bmEscape(value) {
 
     return String(value ?? "")
@@ -1255,6 +1295,8 @@ async function initBeanMachineLiveSystem() {
         populateReviewEmployees(data.employees || []);
         renderAnnouncements(data.announcements || []);
         renderEvents(data.events || []);
+        renderManagedMenu(data.menu || []);
+        renderManagedGallery(data.gallery || []);
 
     } catch (error) {
 
@@ -1263,6 +1305,11 @@ async function initBeanMachineLiveSystem() {
     }
 
 }
+
+// Keep an already-open public page synchronized with management changes.
+setInterval(() => {
+    if (document.visibilityState === "visible") refreshPublicLiveData();
+}, 30000);
 
 function showMaintenanceMode(message) {
 
@@ -1307,8 +1354,9 @@ function renderEmployeeOfMonth(current, history) {
     highlight.textContent = current.highlight || "";
     month.textContent = current.month || "";
 
-    if (current.photo) {
-        photo.src = current.photo;
+    if (current.photo && photo) {
+        photo.src = bmImageUrl(current.photo);
+        photo.onerror = () => { photo.src = "https://via.placeholder.com/500x500?text=Bean+Machine"; };
     }
 
     if (historyBox) {
@@ -1471,37 +1519,37 @@ function renderEvents(items) {
 }
 
 function renderManagedMenu(items) {
-
-    const box = document.getElementById("managedMenuGrid");
-
+    const box = document.querySelector("#menu .menu-grid");
     if (!box) return;
-
-    box.innerHTML = items.length ? items.map(item => `
-        <article class="food-card">
-            <img src="${bmEscape(item.image || "https://via.placeholder.com/800x600?text=Bean+Machine")}"
-                 alt="${bmEscape(item.name)}">
-            <h3>${bmEscape(item.name)}</h3>
+    const managed = (items || []).filter(item => String(item.Active).toLowerCase() !== "false");
+    box.querySelectorAll(".managed-menu-card").forEach(card => card.remove());
+    if (!managed.length) return;
+    const fragment = managed.map(item => `
+        <div class="menu-card managed-menu-card">
+            <img src="${bmEscape(bmImageUrl(item.image))}" alt="${bmEscape(item.name || "Bean Machine Menu Item")}">
+            <h3>${bmEscape(item.name || "Menu Item")}</h3>
             <p>${bmEscape(item.description || "")}</p>
             <span>${bmEscape(item.price || "")}</span>
-        </article>
-    `).join("") : '<div class="live-empty">No managed menu items yet.</div>';
-
+        </div>
+    `).join("");
+    box.insertAdjacentHTML("beforeend", fragment);
 }
 
 function renderManagedGallery(items) {
-
-    const box = document.getElementById("managedGalleryGrid");
-
+    const box = document.querySelector("#gallery .gallery-grid");
     if (!box) return;
-
-    box.innerHTML = items.length ? items.map(item => `
-        <article class="managed-gallery-item">
-            <img src="${bmEscape(item.image)}" alt="${bmEscape(item.title || "Bean Machine Gallery")}">
-            <div class="managed-gallery-caption">${bmEscape(item.title || "")}</div>
-        </article>
-    `).join("") : '<div class="live-empty">No managed gallery images yet.</div>';
-
+    const managed = (items || []).filter(item => String(item.Active).toLowerCase() !== "false");
+    box.querySelectorAll(".managed-gallery-image").forEach(image => image.parentElement.remove());
+    if (!managed.length) return;
+    const fragment = managed.map(item => `
+        <div class="managed-gallery-image-wrap">
+            <img class="managed-gallery-image" src="${bmEscape(bmImageUrl(item.image))}" alt="${bmEscape(item.title || "Bean Machine Gallery")}">
+            ${item.title ? `<span class="managed-gallery-caption">${bmEscape(item.title)}</span>` : ""}
+        </div>
+    `).join("");
+    box.insertAdjacentHTML("beforeend", fragment);
 }
+
 
 function initReviewForm() {
 
@@ -1735,12 +1783,13 @@ function renderDashboardApplications(applications, panel) {
                             <td>${bmEscape(item.CID || item.cid)}<br>${bmEscape(item["Discord Username"] || item.discord)}</td>
                             <td>${bmEscape(item["Family Name"] || item.family)}</td>
                             <td>${bmEscape(item["Flexible Hours"] || item.flexibleHours)}</td>
-                            <td>${bmEscape(bmField(item, "status", "Status") || "Pending")}</td>
+                            <td><span class="dashboard-status dashboard-status-${String(bmField(item, "status", "Status") || "Pending").toLowerCase()}">${bmEscape(bmField(item, "status", "Status") || "Pending")}</span></td>
                             <td>
                                 <div class="dashboard-action">
-                                    <button data-app-action="Interview" data-id="${bmEscape(item._row)}">Interview</button>
-                                    <button data-app-action="Accepted" data-id="${bmEscape(item._row)}">Accept</button>
-                                    <button data-app-action="Rejected" data-id="${bmEscape(item._row)}">Reject</button>
+                                    <button data-app-action="Interview" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Interview" ? "disabled" : ""}>Interview</button>
+                                    <button data-app-action="Accepted" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Accepted" ? "disabled" : ""}>Accept</button>
+                                    <button data-app-action="Rejected" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Rejected" ? "disabled" : ""}>Reject</button>
+                                    <button data-app-delete="1" data-id="${bmEscape(item._row)}">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -1753,21 +1802,37 @@ function renderDashboardApplications(applications, panel) {
 
             button.addEventListener("click", async () => {
 
-                await bmPost({
-                    action: "update_application",
-                    pin: sessionStorage.getItem("beanMachineAdminPin"),
-                    row: button.dataset.id,
-                    status: button.dataset.appAction
-                });
-
-                const target = applications.find(x => String(x._row) === String(button.dataset.id));
-
-                if (target) { target.status = button.dataset.appAction; target.Status = button.dataset.appAction; }
-
-                draw();
+                button.disabled = true;
+                try {
+                    await bmAdminPost({
+                        action: "update_application",
+                        pin: sessionStorage.getItem("beanMachineAdminPin"),
+                        row: button.dataset.id,
+                        status: button.dataset.appAction
+                    });
+                    await refreshManagementTab("applications", panel);
+                    await refreshPublicLiveData();
+                } catch (error) {
+                    alert(error.message || "Could not update the application.");
+                    button.disabled = false;
+                }
 
             });
 
+        });
+
+        table.querySelectorAll("[data-app-delete]").forEach(button => {
+            button.addEventListener("click", async () => {
+                if (!confirm("Delete this application permanently?")) return;
+                button.disabled = true;
+                try {
+                    await bmAdminPost({ action: "delete_application", pin: sessionStorage.getItem("beanMachineAdminPin"), row: button.dataset.id });
+                    await refreshManagementTab("applications", panel);
+                } catch (error) {
+                    alert(error.message || "Could not delete the application.");
+                    button.disabled = false;
+                }
+            });
         });
 
     }
@@ -1819,9 +1884,11 @@ function renderDashboardReviews(reviews, panel) {
                             <td>${bmEscape(bmField(item, "reviewType", "Feedback Type"))}</td>
                             <td>${bmEscape(bmField(item, "message", "Message"))}</td>
                             <td>
+                                <div><span class="dashboard-status dashboard-status-${String(bmField(item, "status", "Status") || "Pending").toLowerCase()}">${bmEscape(bmField(item, "status", "Status") || "Pending")}</span></div>
                                 <div class="dashboard-action">
-                                    <button data-review-action="Approved" data-id="${bmEscape(item._row)}">Approve</button>
-                                    <button data-review-action="Rejected" data-id="${bmEscape(item._row)}">Reject</button>
+                                    <button data-review-action="Approved" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Approved" ? "disabled" : ""}>Approve</button>
+                                    <button data-review-action="Rejected" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Rejected" ? "disabled" : ""}>Reject</button>
+                                    <button data-review-delete="1" data-id="${bmEscape(item._row)}">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -1834,21 +1901,38 @@ function renderDashboardReviews(reviews, panel) {
 
             button.addEventListener("click", async () => {
 
-                await bmPost({
-                    action: "moderate_review",
-                    pin: sessionStorage.getItem("beanMachineAdminPin"),
-                    row: button.dataset.id,
-                    status: button.dataset.reviewAction
-                });
-
-                const target = reviews.find(x => String(x._row) === String(button.dataset.id));
-
-                if (target) { target.status = button.dataset.reviewAction; target.Status = button.dataset.reviewAction; }
-
-                draw();
+                button.disabled = true;
+                try {
+                    await bmAdminPost({
+                        action: "moderate_review",
+                        pin: sessionStorage.getItem("beanMachineAdminPin"),
+                        row: button.dataset.id,
+                        status: button.dataset.reviewAction
+                    });
+                    await refreshManagementTab("reviews", panel);
+                    await refreshPublicLiveData();
+                } catch (error) {
+                    alert(error.message || "Could not moderate the review.");
+                    button.disabled = false;
+                }
 
             });
 
+        });
+
+        table.querySelectorAll("[data-review-delete]").forEach(button => {
+            button.addEventListener("click", async () => {
+                if (!confirm("Delete this review permanently?")) return;
+                button.disabled = true;
+                try {
+                    await bmAdminPost({ action: "delete_review", pin: sessionStorage.getItem("beanMachineAdminPin"), row: button.dataset.id });
+                    await refreshManagementTab("reviews", panel);
+                    await refreshPublicLiveData();
+                } catch (error) {
+                    alert(error.message || "Could not delete the review.");
+                    button.disabled = false;
+                }
+            });
         });
 
     }
@@ -1897,14 +1981,18 @@ function renderDashboardEmployees(employees, panel) {
 
         const formData = Object.fromEntries(new FormData(event.target).entries());
 
-        await bmPost({
-            action: "save_employee",
-            pin: sessionStorage.getItem("beanMachineAdminPin"),
-            ...formData
-        });
-
-        event.target.reset();
-        panel.innerHTML += '<p class="application-status success">Employee saved. Refresh the dashboard to see the update.</p>';
+        try {
+            await bmAdminPost({
+                action: "save_employee",
+                pin: sessionStorage.getItem("beanMachineAdminPin"),
+                ...formData
+            });
+            event.target.reset();
+            await refreshManagementTab("employees", panel);
+            await refreshPublicLiveData();
+        } catch (error) {
+            alert(error.message || "Could not save the employee.");
+        }
 
     });
 
@@ -1914,14 +2002,13 @@ function renderDashboardEmployees(employees, panel) {
 
             if (!confirm("Delete this employee profile permanently?")) return;
             try {
-                await bmPost({
+                await bmAdminPost({
                     action: "delete_employee",
                     pin: sessionStorage.getItem("beanMachineAdminPin"),
                     row: button.dataset.employeeRow
                 });
-                const target = employees.find(x => String(x._row) === String(button.dataset.employeeRow));
-                if (target) target.Active = "false";
-                button.closest("tr").remove();
+                await refreshManagementTab("employees", panel);
+                await refreshPublicLiveData();
             } catch (error) {
                 alert("Could not delete the employee. Please try again.");
             }
@@ -1984,6 +2071,17 @@ function renderDashboardContent(data, panel) {
             <input name="image" placeholder="Image URL" required>
             <button type="submit">Add Gallery Image</button>
         </form>
+
+        <div class="dashboard-content-preview">
+            <h3 style="margin-top:30px;">Current Content</h3>
+            <div class="dashboard-card-grid">
+                <div class="dashboard-stat"><strong>${(data.employeeOfMonth || []).length}</strong><span>Employee of Month Records</span></div>
+                <div class="dashboard-stat"><strong>${(data.announcements || []).length}</strong><span>Announcements</span></div>
+                <div class="dashboard-stat"><strong>${(data.events || []).length}</strong><span>Events</span></div>
+                <div class="dashboard-stat"><strong>${(data.menu || []).length}</strong><span>Managed Menu Items</span></div>
+                <div class="dashboard-stat"><strong>${(data.gallery || []).length}</strong><span>Managed Gallery Images</span></div>
+            </div>
+        </div>
     `;
 
     bindContentForm("eomForm", "save_eom");
@@ -2006,18 +2104,25 @@ function bindContentForm(formId, action) {
 
         const values = Object.fromEntries(new FormData(form).entries());
 
-        await bmPost({
-            action,
-            pin: sessionStorage.getItem("beanMachineAdminPin"),
-            ...values
-        });
-
-        form.reset();
-
-        const note = document.createElement("div");
-        note.className = "application-status success";
-        note.textContent = "Saved. Refresh the public data after the change.";
-        form.after(note);
+        try {
+            await bmAdminPost({
+                action,
+                pin: sessionStorage.getItem("beanMachineAdminPin"),
+                ...values
+            });
+            form.reset();
+            await refreshManagementTab("content", document.getElementById("dashboardPanel"));
+            await refreshPublicLiveData();
+            const note = document.createElement("div");
+            note.className = "application-status success";
+            note.textContent = "Saved successfully. The public content has been refreshed.";
+            form.after(note);
+        } catch (error) {
+            const note = document.createElement("div");
+            note.className = "application-status error";
+            note.textContent = error.message || "Could not save this content.";
+            form.after(note);
+        }
 
     });
 
@@ -2081,7 +2186,7 @@ function renderDashboardSettings(settings, panel) {
         const form = new FormData(event.target);
 
         try {
-            await bmPost({
+            await bmAdminPost({
                 action: "save_settings",
                 pin: sessionStorage.getItem("beanMachineAdminPin"),
                 notifyApplications: form.get("notifyApplications") === "on",
@@ -2092,9 +2197,12 @@ function renderDashboardSettings(settings, panel) {
                 maintenanceMessage: form.get("maintenanceMessage") || ""
             });
 
+            await refreshPublicLiveData();
+            const fresh = await bmGet("admin", { pin: sessionStorage.getItem("beanMachineAdminPin") });
+            window.BEAN_MACHINE_ADMIN_DATA = fresh;
             event.target.insertAdjacentHTML(
                 "afterend",
-                '<div class="application-status success">Settings saved. Refresh the dashboard if you want to confirm the updated values.</div>'
+                '<div class="application-status success">Settings saved successfully.</div>'
             );
         } catch (error) {
             event.target.insertAdjacentHTML(
