@@ -1340,7 +1340,6 @@ function renderEmployeeOfMonth(current, history) {
     const message = document.getElementById("eomMessage");
     const highlight = document.getElementById("eomHighlight");
     const photo = document.getElementById("eomPhoto");
-    const month = document.getElementById("eomMonth");
     const historyBox = document.getElementById("eomHistory");
 
     if (!name) return;
