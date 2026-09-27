@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initRevealAnimation();
     initGalleryHover();
     initApplicationForm();
+    initSuccessPopup();
     initBeanMachineLiveSystem();
     initReviewForm();
     initManagementDashboard();
@@ -1021,34 +1022,11 @@ this.alt="Image Missing";
 });
 
 /*====================================
-    DISCORD PLACEHOLDER
+    OPTIONAL BUTTON PLACEHOLDERS
 ====================================*/
 
-document.querySelectorAll(".discord").forEach(btn=>{
-
-btn.href="https://discord.gg/YOURSERVER";
-
-});
-
-/*====================================
-    FIVE M BUTTON PLACEHOLDER
-====================================*/
-
-document.querySelectorAll(".join").forEach(btn=>{
-
-btn.addEventListener("click",(e)=>{
-
-e.preventDefault();
-
-alert(
-
-"Replace this with:\nconnect YOURSERVERIP"
-
-);
-
-});
-
-});
+// Keep real links from index.html intact. Do not overwrite them with
+// placeholder URLs after the page has loaded.
 
 /*====================================
     END
@@ -1064,24 +1042,19 @@ console.log(" Website Ready ");
 
 console.log("====================================");
 
+function initSuccessPopup() {
+    const popup = document.getElementById("popup");
+    const close = document.getElementById("closePopup");
+    if (!popup || !close) return;
+    close.addEventListener("click", () => popup.classList.remove("active"));
+    popup.addEventListener("click", (event) => {
+        if (event.target === popup) popup.classList.remove("active");
+    });
+}
+
 /*====================================
     DIRECT JOB APPLICATION
 ====================================*/
-
-function bmField(obj, ...keys) {
-    for (const key of keys) {
-        if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
-    }
-    return "";
-}
-
-function bmImageUrl(value) {
-    const url = String(value || "").trim();
-    if (!url) return "";
-    const fileMatch = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
-    if (fileMatch) return "https://drive.google.com/thumbnail?id=" + fileMatch[1] + "&sz=w1000";
-    return url;
-}
 
 function initApplicationForm() {
 
@@ -1131,23 +1104,37 @@ function initApplicationForm() {
 
         try {
 
-            // no-cors is intentional: Google Apps Script receives the POST,
-            // while the browser does not need to read the cross-origin response.
-            await fetch(endpoint, {
-                method: "POST",
-                mode: "no-cors",
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8"
-                },
-                body: JSON.stringify(data)
+            // Use a GET request for public applications. Google Apps Script
+            // web apps do not expose normal CORS headers, and browser no-cors
+            // POSTs make failures impossible to detect. GET lets us read the
+            // JSON response and confirm that the application was actually saved.
+            const query = new URLSearchParams({
+                action: "job_application",
+                ...data
             });
+
+            const response = await fetch(endpoint + "?" + query.toString(), {
+                method: "GET",
+                cache: "no-store"
+            });
+
+            if (!response.ok) throw new Error("Application server request failed.");
+
+            const result = await response.json();
+            if (!result.ok) throw new Error(result.error || "Application was not saved.");
 
             form.reset();
 
             if (status) {
-                status.className = "application-status success";
-                status.textContent =
-                    "Application submitted successfully. Thank you for applying to Bean Machine!";
+                if (result.notificationOk === false) {
+                    status.className = "application-status success";
+                    status.textContent =
+                        "Application submitted successfully, but the management Discord notification could not be delivered. Management can check the webhook settings.";
+                } else {
+                    status.className = "application-status success";
+                    status.textContent =
+                        "Application submitted successfully. Thank you for applying to Bean Machine!";
+                }
             }
 
             const popup = document.getElementById("popup");
@@ -1329,13 +1316,28 @@ function renderEmployeeOfMonth(current, history) {
         historyBox.innerHTML = (history || []).map(item => `
             <div class="history-card">
                 <small>${bmEscape(item.month)}</small>
-                <h4>${bmEscape(bmField(item, "name", "Name"))}</h4>
-                <p>${bmEscape(bmField(item, "rank", "Rank"))}</p>
+                <h4>${bmEscape(item.name)}</h4>
+                <p>${bmEscape(item.rank)}</p>
             </div>
         `).join("");
 
     }
 
+}
+
+function bmField(obj, ...keys) {
+    for (const key of keys) {
+        if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
+    }
+    return "";
+}
+
+function bmImageUrl(value) {
+    let url = String(value || "").trim();
+    if (!url) return "https://via.placeholder.com/600x600?text=Bean+Machine";
+    const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
+    if (drive) return `https://drive.google.com/thumbnail?id=${drive[1]}&sz=w1000`;
+    return url;
 }
 
 function renderEmployees(employees) {
@@ -1351,18 +1353,18 @@ function renderEmployees(employees) {
 
     box.innerHTML = employees.map(employee => {
 
-        const rating = employee.rating
-            ? Number(employee.rating).toFixed(1)
+        const rating = bmField(employee, "rating", "Rating")
+            ? Number(bmField(employee, "rating", "Rating")).toFixed(1)
             : "0.0";
 
         return `
             <article class="profile-card">
-                <img src="${bmEscape(employee.photo || "https://via.placeholder.com/600x600?text=Bean+Machine")}"
-                     alt="${bmEscape(employee.name)}">
+                <img src="${bmEscape(bmImageUrl(bmField(employee, "photo", "Photo")))}"
+                     alt="${bmEscape(bmField(employee, "name", "Name"))}">
                 <div class="profile-card-content">
-                    <h3>${bmEscape(employee.name)}</h3>
-                    <p class="profile-rank">${bmEscape(employee.rank)}</p>
-                    <p>${bmEscape(employee.bio)}</p>
+                    <h3>${bmEscape(bmField(employee, "name", "Name"))}</h3>
+                    <p class="profile-rank">${bmEscape(bmField(employee, "rank", "Rank"))}</p>
+                    <p>${bmEscape(bmField(employee, "bio", "Bio"))}</p>
                     <p class="profile-rating">${bmStars(Math.round(Number(bmField(employee, "rating", "Rating") || 0)))} ${rating}/5</p>
                 </div>
             </article>
@@ -1381,7 +1383,7 @@ function populateReviewEmployees(employees) {
     select.innerHTML =
         '<option value="" selected disabled>Select an employee</option>' +
         employees.map(employee =>
-            `<option value="${bmEscape(employee.name)}">${bmEscape(employee.name)} — ${bmEscape(employee.rank)}</option>`
+            `<option value="${bmEscape(bmField(employee, "name", "Name"))}">${bmEscape(bmField(employee, "name", "Name"))} — ${bmEscape(bmField(employee, "rank", "Rank"))}</option>`
         ).join("");
 
 }
@@ -1429,7 +1431,7 @@ function renderApprovedReviews(reviews) {
                 <span class="leaderboard-stars">${bmStars(Number(bmField(item, "rating", "Rating")))}</span>
             </div>
             <p>${bmEscape(bmField(item, "message", "Message"))}</p>
-            <small>${bmEscape(bmField(item, "reviewerName", "Reviewer Name") || "Bean Machine Guest")} • ${bmEscape(bmField(item, "reviewType", "Feedback Type") || "Service Review")}</small>
+            <small>${bmEscape(item.reviewerName || "Bean Machine Guest")} • ${bmEscape(item.reviewType || "Service Review")}</small>
         </article>
     `).join("");
 
@@ -1477,8 +1479,8 @@ function renderManagedMenu(items) {
     box.innerHTML = items.length ? items.map(item => `
         <article class="food-card">
             <img src="${bmEscape(item.image || "https://via.placeholder.com/800x600?text=Bean+Machine")}"
-                 alt="${bmEscape(bmField(item, "name", "Name"))}">
-            <h3>${bmEscape(bmField(item, "name", "Name"))}</h3>
+                 alt="${bmEscape(item.name)}">
+            <h3>${bmEscape(item.name)}</h3>
             <p>${bmEscape(item.description || "")}</p>
             <span>${bmEscape(item.price || "")}</span>
         </article>
@@ -1568,77 +1570,105 @@ function initManagementDashboard() {
     const loginBox = document.getElementById("managementLogin");
     const panel = document.getElementById("dashboardPanel");
 
-    if (!loginButton || !dashboard || !panel) return;
+    if (!loginButton || !dashboard) return;
 
     let adminPin = sessionStorage.getItem("beanMachineAdminPin") || "";
 
     function bindDashboardTabs(data) {
         dashboard.querySelectorAll(".dashboard-tabs button").forEach(button => {
-            button.onclick = (event) => {
-                event.preventDefault();
+            button.onclick = () => {
                 dashboard.querySelectorAll(".dashboard-tabs button")
                     .forEach(item => item.classList.remove("active"));
                 button.classList.add("active");
-                panel.innerHTML = '<div class="application-status">Loading...</div>';
+                panel.innerHTML = '<div class="live-loading">Loading...</div>';
                 setTimeout(() => renderDashboardTab(button.dataset.tab, data, panel), 0);
             };
         });
     }
 
-    async function loadDashboard(pin) {
-        const data = await bmGet("admin", { pin });
-        if (!data.ok) throw new Error(data.error || "Access denied.");
-        window.BEAN_MACHINE_ADMIN_DATA = data;
-        loginBox.hidden = true;
-        dashboard.hidden = false;
-        renderDashboardApplications(data.applications || [], panel);
-        const first = dashboard.querySelector('.dashboard-tabs button[data-tab="applications"]');
-        dashboard.querySelectorAll(".dashboard-tabs button").forEach(b => b.classList.remove("active"));
-        if (first) first.classList.add("active");
-        bindDashboardTabs(data);
-        return data;
-    }
+    async function loadDashboard() {
 
-    async function tryLogin(pin, messageOnError) {
         try {
-            await loadDashboard(pin);
-            sessionStorage.setItem("beanMachineAdminPin", pin);
-            adminPin = pin;
-            if (loginStatus) loginStatus.textContent = "";
+
+            const data = await bmGet("admin", { pin: adminPin });
+
+            if (!data.ok) throw new Error(data.error || "Access denied.");
+
+            loginBox.hidden = true;
+            dashboard.hidden = false;
+
+            window.BEAN_MACHINE_ADMIN_DATA = data;
+
+            panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
+            setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
+
+            bindDashboardTabs(data);
+
         } catch (error) {
+
             sessionStorage.removeItem("beanMachineAdminPin");
+
             if (loginStatus) {
                 loginStatus.className = "application-status error";
-                loginStatus.textContent = messageOnError || "Invalid management PIN or server configuration.";
+                loginStatus.textContent = "Invalid management PIN or server configuration.";
             }
+
         }
+
     }
 
-    if (adminPin) tryLogin(adminPin);
+    if (adminPin) loadDashboard();
 
-    loginButton.addEventListener("click", async (event) => {
-        event.preventDefault();
-        const pin = (pinInput.value || "").trim();
-        if (!pin) {
+    loginButton.addEventListener("click", async () => {
+
+        adminPin = pinInput.value.trim();
+
+        if (!adminPin) {
             loginStatus.textContent = "Enter the management PIN.";
             return;
         }
-        loginStatus.className = "application-status";
+
         loginStatus.textContent = "Checking access...";
-        await tryLogin(pin, "Invalid management PIN or server configuration.");
+
+        try {
+
+            const data = await bmGet("admin", { pin: adminPin });
+
+            if (!data.ok) throw new Error();
+
+            sessionStorage.setItem("beanMachineAdminPin", adminPin);
+            window.BEAN_MACHINE_ADMIN_DATA = data;
+
+            loginBox.hidden = true;
+            dashboard.hidden = false;
+
+            panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
+            setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
+            bindDashboardTabs(data);
+
+        } catch (error) {
+
+            loginStatus.className = "application-status error";
+            loginStatus.textContent = "Invalid management PIN.";
+
+        }
+
     });
 
     if (logoutButton) {
-        logoutButton.addEventListener("click", (event) => {
-            event.preventDefault();
+
+        logoutButton.addEventListener("click", () => {
+
             sessionStorage.removeItem("beanMachineAdminPin");
-            adminPin = "";
+
             dashboard.hidden = true;
             loginBox.hidden = false;
             pinInput.value = "";
-            if (loginStatus) loginStatus.textContent = "";
+
         });
+
     }
+
 }
 
 function renderDashboardTab(tab, data, panel) {
@@ -1662,8 +1692,8 @@ function renderDashboardApplications(applications, panel) {
     panel.innerHTML = `
         <div class="dashboard-card-grid">
             <div class="dashboard-stat"><strong>${applications.length}</strong><span>Total Applications</span></div>
-            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") === "Pending") || !x.status).length}</strong><span>Pending</span></div>
-            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") === "Accepted")).length}</strong><span>Accepted</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") || "Pending") === "Pending").length}</strong><span>Pending</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => bmField(x, "status", "Status") === "Accepted").length}</strong><span>Accepted</span></div>
         </div>
 
         <div class="dashboard-form">
@@ -1813,7 +1843,7 @@ function renderDashboardReviews(reviews, panel) {
 
                 const target = reviews.find(x => String(x._row) === String(button.dataset.id));
 
-                if (target) target.status = button.dataset.reviewAction;
+                if (target) { target.status = button.dataset.reviewAction; target.Status = button.dataset.reviewAction; }
 
                 draw();
 
@@ -1837,7 +1867,7 @@ function renderDashboardEmployees(employees, panel) {
         <form id="employeeForm" class="dashboard-form">
             <input name="name" placeholder="Employee name" required>
             <input name="rank" placeholder="Rank" required>
-            <input name="photo" placeholder="Photo URL" required>
+            <input name="photo" placeholder="Photo URL or Google Drive link" required>
             <textarea name="bio" placeholder="Employee bio"></textarea>
             <button type="submit">Save Employee</button>
         </form>
@@ -1882,13 +1912,19 @@ function renderDashboardEmployees(employees, panel) {
 
         button.addEventListener("click", async () => {
 
-            await bmPost({
-                action: "delete_employee",
-                pin: sessionStorage.getItem("beanMachineAdminPin"),
-                row: button.dataset.employeeRow
-            });
-
-            button.closest("tr").remove();
+            if (!confirm("Delete this employee profile permanently?")) return;
+            try {
+                await bmPost({
+                    action: "delete_employee",
+                    pin: sessionStorage.getItem("beanMachineAdminPin"),
+                    row: button.dataset.employeeRow
+                });
+                const target = employees.find(x => String(x._row) === String(button.dataset.employeeRow));
+                if (target) target.Active = "false";
+                button.closest("tr").remove();
+            } catch (error) {
+                alert("Could not delete the employee. Please try again.");
+            }
 
         });
 
@@ -2028,8 +2064,13 @@ function renderDashboardSettings(settings, panel) {
 
         </form>
 
+        <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button type="button" id="testApplicationWebhook" class="dashboard-button">Test Application Webhook</button>
+            <span id="webhookTestStatus" class="application-status" role="status" aria-live="polite"></span>
+        </div>
+
         <p style="margin-top:18px;color:#999;">
-            The Discord webhook itself stays private in Apps Script Script Properties.
+            Discord webhook URLs remain private in Apps Script Script Properties.
         </p>
     `;
 
@@ -2039,22 +2080,63 @@ function renderDashboardSettings(settings, panel) {
 
         const form = new FormData(event.target);
 
-        await bmPost({
-            action: "save_settings",
-            pin: sessionStorage.getItem("beanMachineAdminPin"),
-            notifyApplications: form.get("notifyApplications") === "on",
-            notifyReviews: form.get("notifyReviews") === "on",
-            notifyContact: form.get("notifyContact") === "on",
-            notifyNewsletter: form.get("notifyNewsletter") === "on",
-            maintenanceEnabled: form.get("maintenanceEnabled") === "on",
-            maintenanceMessage: form.get("maintenanceMessage") || ""
-        });
+        try {
+            await bmPost({
+                action: "save_settings",
+                pin: sessionStorage.getItem("beanMachineAdminPin"),
+                notifyApplications: form.get("notifyApplications") === "on",
+                notifyReviews: form.get("notifyReviews") === "on",
+                notifyContact: form.get("notifyContact") === "on",
+                notifyNewsletter: form.get("notifyNewsletter") === "on",
+                maintenanceEnabled: form.get("maintenanceEnabled") === "on",
+                maintenanceMessage: form.get("maintenanceMessage") || ""
+            });
 
-        event.target.insertAdjacentHTML(
-            "afterend",
-            '<div class="application-status success">Settings saved.</div>'
-        );
+            event.target.insertAdjacentHTML(
+                "afterend",
+                '<div class="application-status success">Settings saved. Refresh the dashboard if you want to confirm the updated values.</div>'
+            );
+        } catch (error) {
+            event.target.insertAdjacentHTML(
+                "afterend",
+                '<div class="application-status error">Could not save settings. Please try again.</div>'
+            );
+        }
 
     });
+
+    const testButton = panel.querySelector("#testApplicationWebhook");
+    const testStatus = panel.querySelector("#webhookTestStatus");
+
+    if (testButton) {
+        testButton.addEventListener("click", async () => {
+            testButton.disabled = true;
+            if (testStatus) {
+                testStatus.className = "application-status";
+                testStatus.textContent = "Testing...";
+            }
+
+            try {
+                const result = await bmGet("test_webhook", {
+                    pin: sessionStorage.getItem("beanMachineAdminPin"),
+                    type: "APPLICATIONS"
+                });
+
+                if (!result.ok) throw new Error(result.error || "Webhook test failed.");
+
+                if (testStatus) {
+                    testStatus.className = "application-status success";
+                    testStatus.textContent = "Application webhook is working.";
+                }
+            } catch (error) {
+                if (testStatus) {
+                    testStatus.className = "application-status error";
+                    testStatus.textContent = error.message || "Webhook test failed.";
+                }
+            } finally {
+                testButton.disabled = false;
+            }
+        });
+    }
 
 }
