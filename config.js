@@ -5,5 +5,5 @@
  * Web App URL. NEVER put a Discord webhook or management PIN here.
  */
 window.BEAN_MACHINE_CONFIG = {
-    GOOGLE_APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxyGhe5vp9-xpxgpYyCMaehQ4UMztkFYcnPxHVIz61m3Myz0-dCFKN31G9e5QvrVzzg/exec"
+    GOOGLE_APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzBs51ltruHYbKA4BukHzR69si6XIzcbGnqNFTSpz_tERTvyTs2H9B4iz8IJ84yPiRw/exec"
 };
