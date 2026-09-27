@@ -1127,20 +1127,24 @@ function initApplicationForm() {
 
         try {
 
-            // no-cors is intentional: Google Apps Script receives the POST,
-            // while the browser does not need to read the cross-origin response.
-            // Submit in the background so a slow Discord webhook or Apps Script
-            // response cannot make the public form appear stuck. The backend
-            // writes the application to Google Sheets before sending Discord.
-            fetch(endpoint, {
-                method: "POST",
-                mode: "no-cors",
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8"
-                },
-                body: JSON.stringify(data),
-                keepalive: true
-            }).catch(error => console.error("Background application submission:", error));
+            // Use a GET request for public applications. Google Apps Script
+            // web apps do not expose normal CORS headers, and browser no-cors
+            // POSTs make failures impossible to detect. GET lets us read the
+            // JSON response and confirm that the application was actually saved.
+            const query = new URLSearchParams({
+                action: "job_application",
+                ...data
+            });
+
+            const response = await fetch(endpoint + "?" + query.toString(), {
+                method: "GET",
+                cache: "no-store"
+            });
+
+            if (!response.ok) throw new Error("Application server request failed.");
+
+            const result = await response.json();
+            if (!result.ok) throw new Error(result.error || "Application was not saved.");
 
             form.reset();
 
