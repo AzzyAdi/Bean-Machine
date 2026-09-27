@@ -73,7 +73,13 @@
 
 <li><a href="#staff">Staff</a></li>
 
-<li><a href="#contact">Contact</a></li>
+<li><a href="#employee-month">Employee of the Month</a></li>
+
+<li><a href="#reviews">Reviews</a></li>
+
+<li><a href="#events">Events</a></li>
+
+<li><a href="#careers">Careers</a></li>
 
 
 
@@ -81,16 +87,14 @@
 
 <div class="nav-buttons">
 
-<a href="https://docs.google.com/forms/d/e/1FAIpQLSd1jRHayR9owBeE5TgUXO2guuTnrQQ8Nf1EJpiJHaHz1ZSUCA/viewform?usp=publish-editor" class="discord">
-
-<i class="" ></i>
-
-Apply Now
-
+<a href="#careers" class="nav-action nav-apply">
+<i class="fas fa-paper-plane"></i>
+<span>Apply Now</span>
 </a>
 
-
-
+<a href="#managementLogin" class="nav-action nav-login">
+<i class="fas fa-lock"></i>
+<span>Login</span>
 </a>
 
 </div>
@@ -261,7 +265,7 @@ Our employees provide the excellent customer service.
 
 </div>
 
-<a href="https://docs.google.com/forms/d/e/1FAIpQLSd1jRHayR9owBeE5TgUXO2guuTnrQQ8Nf1EJpiJHaHz1ZSUCA/viewform?usp=publish-editor" class="btn">
+<a href="#careers" class="btn">
 
 Become Staff
 
@@ -999,108 +1003,448 @@ Discord
 <!-- CONTACT -->
 <!-- ========================= -->
 
-<section id="contact">
+
+<!-- ========================= -->
+<!-- BEAN MACHINE JOB APPLICATION -->
+<!-- ========================= -->
+
+<section id="careers" class="application-section">
 
 <div class="container">
 
 <div class="title">
 
-<h4>CONTACT US</h4>
+<h4>JOIN OUR TEAM</h4>
 
-<h2>Get In Touch</h2>
+<h2>Bean Machine Job Application Form</h2>
 
 <p>
-
-Have questions? We'd love to hear from you.
-
+Bean Machine Coffee Shop is hiring motivated, responsible, and customer-friendly
+individuals to join our team. We are looking for hardworking staff who can maintain
+professionalism, provide excellent customer service, and contribute positively to
+our workplace environment.
 </p>
 
 </div>
 
-<div class="contact-grid">
+<div class="application-grid">
 
-<div class="contact-info">
+<div class="application-info">
 
-<div class="contact-box">
+<h3>Why Work At Bean Machine?</h3>
 
-<i class="fas fa-location-dot"></i>
+<p>
+Working at Bean Machine offers:
+</p>
 
-<div>
+<ul class="application-benefits">
+<li><i class="fas fa-check-circle"></i> A friendly and supportive working environment.</li>
+<li><i class="fas fa-check-circle"></i> Experience in customer service and teamwork.</li>
+<li><i class="fas fa-check-circle"></i> Opportunities for growth and internal promotion.</li>
+<li><i class="fas fa-check-circle"></i> A stable and structured work schedule.</li>
+<li><i class="fas fa-check-circle"></i> Training provided for all new employees.</li>
+</ul>
 
-<h3>Location</h3>
+<p class="application-expectation">
+We expect all employees to be respectful, punctual, and committed to their duties.
+</p>
 
-<p>Bean Machine, Los Santos</p>
+</div>
+
+<div class="application-form-wrap">
+
+<form id="jobApplicationForm">
+
+<div class="form-row">
+
+<div class="form-field">
+
+<label for="appName">Name (in city) <span>*</span></label>
+
+<input id="appName" name="name" type="text"
+placeholder="Enter your name" required maxlength="100">
+
+</div>
+
+<div class="form-field">
+
+<label for="appPhone">Phone <span>*</span></label>
+
+<input id="appPhone" name="phone" type="tel"
+placeholder="Enter your phone number" required maxlength="40">
 
 </div>
 
 </div>
 
-<div class="contact-box">
+<div class="form-row">
 
-<i class="fab fa-discord"></i>
+<div class="form-field">
 
-<div>
+<label for="appCid">CID <span>*</span></label>
 
-<h3>Discord</h3>
+<input id="appCid" name="cid" type="text"
+placeholder="Enter your CID" required maxlength="40">
 
-<p>discord.gg/beanmachine</p>
+</div>
+
+<div class="form-field">
+
+<label for="appDiscord">Discord Username <span>*</span></label>
+
+<input id="appDiscord" name="discord" type="text"
+placeholder="username or username#0000" required maxlength="100">
 
 </div>
 
 </div>
 
-<div class="contact-box">
+<div class="form-field">
 
-<i class="fas fa-envelope"></i>
+<label for="appFamily">Family Name <span>*</span></label>
 
-<div>
+<input id="appFamily" name="family" type="text"
+placeholder="Family / Gang / Organization / Citizen" required maxlength="120">
 
-<h3>Email</h3>
-
-<p>support@beanmachine.gg</p>
-
-</div>
+<small class="field-help">You can write your Family, Gang, Organization, or <strong>Citizen</strong> if you are not part of a family or gang.</small>
 
 </div>
 
-<div class="contact-box">
+<div class="form-field">
 
-<i class="fas fa-clock"></i>
+<label for="appFlexible">Are you available to work flexible hours? <span>*</span></label>
 
-<div>
+<select id="appFlexible" name="flexibleHours" required>
 
-<h3>Opening Hours</h3>
+<option value="" selected disabled>Select an answer</option>
+<option value="Yes">Yes</option>
+<option value="No">No</option>
 
-<p>24/7 </p>
-
-</div>
-
-</div>
+</select>
 
 </div>
 
-<div class="contact-form">
+<div class="form-field">
 
-<form>
+<label for="appRules">Are you willing to follow company rules and policies? <span>*</span></label>
 
-<input type="text" placeholder="Your Name" required>
+<select id="appRules" name="followRules" required>
 
-<input type="email" placeholder="Email Address" required>
+<option value="" selected disabled>Select an answer</option>
+<option value="Yes">Yes</option>
+<option value="No">No</option>
 
-<input type="text" placeholder="Subject">
+</select>
 
-<textarea rows="8"
-placeholder="Write your message..."></textarea>
+</div>
 
-<button type="submit">
+<div class="application-consent">
 
-Send Message
+<i class="fas fa-circle-info"></i>
+
+<span>
+Please make sure all information is accurate before submitting your application.
+</span>
+
+</div>
+
+<button type="submit" class="application-submit">
+
+<i class="fas fa-paper-plane"></i>
+Submit Application
 
 </button>
+
+<div id="applicationStatus" class="application-status" role="status" aria-live="polite"></div>
 
 </form>
 
 </div>
+
+</div>
+
+</div>
+
+</section>
+
+
+<!-- ========================= -->
+<!-- LIVE BEAN MACHINE SYSTEM -->
+<!-- ========================= -->
+
+<section id="employee-month" class="live-section">
+
+<div class="container">
+
+<div class="title">
+
+<h4>EMPLOYEE OF THE MONTH</h4>
+<h2 id="eomTitle">Bean Machine Star Employee</h2>
+<p id="eomMonth">Loading current award...</p>
+
+</div>
+
+<div id="employeeMonthCard" class="eom-card">
+
+<div class="eom-photo-wrap">
+
+<img id="eomPhoto" src="https://via.placeholder.com/500x500?text=Bean+Machine" alt="Employee of the Month">
+
+</div>
+
+<div class="eom-content">
+
+<span class="eom-badge"><i class="fas fa-award"></i> Employee of the Month</span>
+
+<h3 id="eomName">Loading...</h3>
+<p id="eomRank" class="eom-rank"></p>
+<p id="eomMessage"></p>
+
+<div class="eom-highlight" id="eomHighlight"></div>
+
+</div>
+
+</div>
+
+<div id="eomHistory" class="history-grid"></div>
+
+</div>
+
+</section>
+
+
+<section id="live-staff" class="live-section">
+
+<div class="container">
+
+<div class="title">
+
+<h4>OUR TEAM</h4>
+<h2>Employee Profiles</h2>
+<p>Meet the people behind Bean Machine.</p>
+
+</div>
+
+<div id="employeeProfiles" class="profile-grid">
+
+<div class="live-loading">Loading employee profiles...</div>
+
+</div>
+
+</div>
+
+</section>
+
+
+<section id="reviews" class="live-section">
+
+<div class="container">
+
+<div class="title">
+
+<h4>STAFF SERVICE</h4>
+<h2>Rate Our Staff</h2>
+<p>Tell us about your Bean Machine experience.</p>
+
+</div>
+
+<div class="review-layout">
+
+<div class="review-summary">
+
+<h3>Staff Ratings</h3>
+
+<div id="ratingLeaderboard" class="leaderboard"></div>
+
+<h3 class="approved-reviews-heading">Recent Reviews</h3>
+<div id="approvedReviews" class="approved-reviews"></div>
+
+</div>
+
+<div class="review-form-wrap">
+
+<form id="staffReviewForm">
+
+<div class="form-row">
+
+<div class="form-field">
+
+<label for="reviewEmployee">Employee <span>*</span></label>
+
+<select id="reviewEmployee" name="employee" required>
+<option value="" selected disabled>Select an employee</option>
+</select>
+
+</div>
+
+<div class="form-field">
+
+<label for="reviewRating">Rating <span>*</span></label>
+
+<select id="reviewRating" name="rating" required>
+<option value="" selected disabled>Choose 1–5 stars</option>
+<option value="5">★★★★★ — 5</option>
+<option value="4">★★★★☆ — 4</option>
+<option value="3">★★★☆☆ — 3</option>
+<option value="2">★★☆☆☆ — 2</option>
+<option value="1">★☆☆☆☆ — 1</option>
+</select>
+
+</div>
+
+</div>
+
+<div class="form-row">
+
+<div class="form-field">
+
+<label for="reviewerName">Your Name</label>
+<input id="reviewerName" name="reviewerName" type="text" placeholder="Optional" maxlength="100">
+
+</div>
+
+<div class="form-field">
+
+<label for="reviewerDiscord">Discord Username</label>
+<input id="reviewerDiscord" name="reviewerDiscord" type="text" placeholder="Optional" maxlength="100">
+
+</div>
+
+</div>
+
+<div class="form-field">
+
+<label for="reviewType">Feedback Type <span>*</span></label>
+
+<select id="reviewType" name="reviewType" required>
+<option value="" selected disabled>Select feedback type</option>
+<option value="Service Review">Service Review</option>
+<option value="Report">Report / Complaint</option>
+<option value="Suggestion">Suggestion</option>
+<option value="Compliment">Compliment</option>
+</select>
+
+</div>
+
+<div class="form-field">
+
+<label for="reviewMessage">Message <span>*</span></label>
+
+<textarea id="reviewMessage" name="message" rows="6" placeholder="Tell us what happened..." required maxlength="1500"></textarea>
+
+</div>
+
+<button type="submit" class="application-submit">
+
+<i class="fas fa-star"></i>
+Submit Staff Feedback
+
+</button>
+
+<div id="reviewStatus" class="application-status" role="status" aria-live="polite"></div>
+
+</form>
+
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+
+<section id="events" class="live-section">
+
+<div class="container">
+
+<div class="title">
+
+<h4>WHAT'S HAPPENING</h4>
+<h2>Events & Announcements</h2>
+<p>Keep up with Bean Machine news and upcoming events.</p>
+
+</div>
+
+<div class="updates-grid">
+
+<div>
+
+<h3 class="updates-heading"><i class="fas fa-bullhorn"></i> Announcements</h3>
+<div id="announcementsList" class="update-list"></div>
+
+</div>
+
+<div>
+
+<h3 class="updates-heading"><i class="fas fa-calendar-days"></i> Events</h3>
+<div id="eventsList" class="update-list"></div>
+
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+
+
+
+<section id="management" class="management-section">
+
+<div class="container">
+
+<div class="title">
+
+<h4>MANAGEMENT</h4>
+<h2>Bean Machine Management Dashboard</h2>
+<p>Management access is restricted to authorized Bean Machine management.</p>
+
+</div>
+
+<div id="managementLogin" class="management-login">
+
+<h3><i class="fas fa-lock"></i> Management Access</h3>
+
+<p>Enter the management PIN configured in Google Apps Script.</p>
+
+<div class="management-login-row">
+
+<input id="managementPin" type="password" placeholder="Management PIN" autocomplete="off">
+
+<button id="managementLoginBtn" class="application-submit">Open Dashboard</button>
+
+</div>
+
+<div id="managementLoginStatus" class="application-status"></div>
+
+</div>
+
+<div id="managementDashboard" class="management-dashboard" hidden>
+
+<div class="dashboard-toolbar">
+
+<div>
+<h3>Bean Machine Control Center</h3>
+<p id="dashboardStatus">Connected</p>
+</div>
+
+<button id="managementLogout" class="dashboard-button">Log Out</button>
+
+</div>
+
+<div class="dashboard-tabs">
+
+<button data-tab="applications" class="active">Applications</button>
+<button data-tab="reviews">Reviews</button>
+<button data-tab="content">Content</button>
+<button data-tab="employees">Employees</button>
+<button data-tab="settings">Settings</button>
+
+</div>
+
+<div id="dashboardPanel"></div>
 
 </div>
 
@@ -1191,47 +1535,6 @@ Follow Bean Machine
 </section>
 
 <!-- ========================= -->
-<!-- NEWSLETTER -->
-<!-- ========================= -->
-
-<section id="newsletter">
-
-<div class="container">
-
-<div class="newsletter">
-
-<h2>
-
-Subscribe To Updates
-
-</h2>
-
-<p>
-
-Receive restaurant news and event updates.
-
-</p>
-
-<div class="newsletter-form">
-
-<input type="email"
-placeholder="Email Address">
-
-<button>
-
-Subscribe
-
-</button>
-
-</div>
-
-</div>
-
-</div>
-
-</section>
-
-<!-- ========================= -->
 <!-- FOOTER -->
 <!-- ========================= -->
 
@@ -1275,7 +1578,6 @@ Premium Coffee & Restaurant
 
 <li><a href="#careers">Careers</a></li>
 
-<li><a href="#contact">Contact</a></li>
 
 </ul>
 
@@ -1298,26 +1600,6 @@ Premium Coffee & Restaurant
 <li>Soft Drinks</li>
 
 </ul>
-
-</div>
-
-<div class="footer-col">
-
-<h3>Contact</h3>
-
-<p>
-
-Discord:
-discord.gg/beanmachine
-
-</p>
-
-<p>
-
-Email:
-support@beanmachine
-
-</p>
 
 </div>
 
@@ -1368,10 +1650,10 @@ support@beanmachine
 <li><a href="#staff">Staff</a></li>
 
 <li><a href="#reviews">Reviews</a></li>
+<li><a href="#events">Events</a></li>
 
 <li><a href="#careers">Careers</a></li>
 
-<li><a href="#contact">Contact</a></li>
 
 </ul>
 
@@ -1421,6 +1703,7 @@ Close
 <!-- SCRIPTS -->
 <!-- ========================= -->
 
+<script src="config.js"></script>
 <script src="script.js"></script>
 
 <script disable-devtool-auto src='https://cdn.jsdelivr.net/npm/disable-devtool'></script>
