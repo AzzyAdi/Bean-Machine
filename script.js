@@ -1129,14 +1129,18 @@ function initApplicationForm() {
 
             // no-cors is intentional: Google Apps Script receives the POST,
             // while the browser does not need to read the cross-origin response.
-            await fetch(endpoint, {
+            // Submit in the background so a slow Discord webhook or Apps Script
+            // response cannot make the public form appear stuck. The backend
+            // writes the application to Google Sheets before sending Discord.
+            fetch(endpoint, {
                 method: "POST",
                 mode: "no-cors",
                 headers: {
                     "Content-Type": "text/plain;charset=utf-8"
                 },
-                body: JSON.stringify(data)
-            });
+                body: JSON.stringify(data),
+                keepalive: true
+            }).catch(error => console.error("Background application submission:", error));
 
             form.reset();
 
@@ -1411,7 +1415,7 @@ function renderReviewLeaderboard(stats) {
     box.innerHTML = stats.map((item, index) => `
         <div class="leaderboard-row">
             <div>
-                <strong>${index + 1}. ${bmEscape(item.employee)}</strong>
+                <strong>${index + 1}. ${bmEscape(bmField(item, "employee", "Employee"))}</strong>
                 <small>${Number(item.count || 0)} approved review(s)</small>
             </div>
             <div class="leaderboard-stars">
@@ -1436,10 +1440,10 @@ function renderApprovedReviews(reviews) {
     box.innerHTML = reviews.map(item => `
         <article class="approved-review-card">
             <div class="approved-review-top">
-                <strong>${bmEscape(item.employee)}</strong>
-                <span class="leaderboard-stars">${bmStars(Number(item.rating))}</span>
+                <strong>${bmEscape(bmField(item, "employee", "Employee"))}</strong>
+                <span class="leaderboard-stars">${bmStars(Number(bmField(item, "rating", "Rating")))}</span>
             </div>
-            <p>${bmEscape(item.message)}</p>
+            <p>${bmEscape(bmField(item, "message", "Message"))}</p>
             <small>${bmEscape(item.reviewerName || "Bean Machine Guest")} • ${bmEscape(item.reviewType || "Service Review")}</small>
         </article>
     `).join("");
@@ -1456,7 +1460,7 @@ function renderAnnouncements(items) {
         <article class="update-card">
             <span class="update-date">${bmEscape(item.date)}</span>
             <h4>${bmEscape(item.title)}</h4>
-            <p>${bmEscape(item.message)}</p>
+            <p>${bmEscape(bmField(item, "message", "Message"))}</p>
         </article>
     `).join("") : '<div class="live-empty">No announcements.</div>';
 
@@ -1583,6 +1587,18 @@ function initManagementDashboard() {
 
     let adminPin = sessionStorage.getItem("beanMachineAdminPin") || "";
 
+    function bindDashboardTabs(data) {
+        dashboard.querySelectorAll(".dashboard-tabs button").forEach(button => {
+            button.onclick = () => {
+                dashboard.querySelectorAll(".dashboard-tabs button")
+                    .forEach(item => item.classList.remove("active"));
+                button.classList.add("active");
+                panel.innerHTML = '<div class="live-loading">Loading...</div>';
+                setTimeout(() => renderDashboardTab(button.dataset.tab, data, panel), 0);
+            };
+        });
+    }
+
     async function loadDashboard() {
 
         try {
@@ -1599,21 +1615,7 @@ function initManagementDashboard() {
             panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
             setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
 
-            dashboard.querySelectorAll(".dashboard-tabs button").forEach(button => {
-
-                button.onclick = () => {
-
-                    dashboard.querySelectorAll(".dashboard-tabs button")
-                        .forEach(item => item.classList.remove("active"));
-
-                    button.classList.add("active");
-
-                    panel.innerHTML = '<div class="live-loading">Loading...</div>';
-                    setTimeout(() => renderDashboardTab(button.dataset.tab, data, panel), 0);
-
-                };
-
-            });
+            bindDashboardTabs(data);
 
         } catch (error) {
 
@@ -1655,6 +1657,7 @@ function initManagementDashboard() {
 
             panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
             setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
+            bindDashboardTabs(data);
 
         } catch (error) {
 
@@ -1824,10 +1827,10 @@ function renderDashboardReviews(reviews, panel) {
                     ${filtered.map(item => `
                         <tr>
                             <td>${bmEscape(item.Timestamp || "")}</td>
-                            <td>${bmEscape(item.employee)}</td>
-                            <td>${bmStars(Number(item.rating))}</td>
-                            <td>${bmEscape(item.reviewType)}</td>
-                            <td>${bmEscape(item.message)}</td>
+                            <td>${bmEscape(bmField(item, "employee", "Employee"))}</td>
+                            <td>${bmStars(Number(bmField(item, "rating", "Rating")))}</td>
+                            <td>${bmEscape(bmField(item, "reviewType", "Feedback Type"))}</td>
+                            <td>${bmEscape(bmField(item, "message", "Message"))}</td>
                             <td>
                                 <div class="dashboard-action">
                                     <button data-review-action="Approved" data-id="${bmEscape(item._row)}">Approve</button>
