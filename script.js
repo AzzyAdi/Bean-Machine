@@ -19,7 +19,6 @@ document.addEventListener("DOMContentLoaded", () => {
     initRevealAnimation();
     initGalleryHover();
     initApplicationForm();
-    initSuccessPopup();
     initBeanMachineLiveSystem();
     initReviewForm();
     initManagementDashboard();
@@ -1065,19 +1064,24 @@ console.log(" Website Ready ");
 
 console.log("====================================");
 
-function initSuccessPopup() {
-    const popup = document.getElementById("popup");
-    const close = document.getElementById("closePopup");
-    if (!popup || !close) return;
-    close.addEventListener("click", () => popup.classList.remove("active"));
-    popup.addEventListener("click", (event) => {
-        if (event.target === popup) popup.classList.remove("active");
-    });
-}
-
 /*====================================
     DIRECT JOB APPLICATION
 ====================================*/
+
+function bmField(obj, ...keys) {
+    for (const key of keys) {
+        if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
+    }
+    return "";
+}
+
+function bmImageUrl(value) {
+    const url = String(value || "").trim();
+    if (!url) return "";
+    const fileMatch = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
+    if (fileMatch) return "https://drive.google.com/thumbnail?id=" + fileMatch[1] + "&sz=w1000";
+    return url;
+}
 
 function initApplicationForm() {
 
@@ -1127,24 +1131,16 @@ function initApplicationForm() {
 
         try {
 
-            // Use a GET request for public applications. Google Apps Script
-            // web apps do not expose normal CORS headers, and browser no-cors
-            // POSTs make failures impossible to detect. GET lets us read the
-            // JSON response and confirm that the application was actually saved.
-            const query = new URLSearchParams({
-                action: "job_application",
-                ...data
+            // no-cors is intentional: Google Apps Script receives the POST,
+            // while the browser does not need to read the cross-origin response.
+            await fetch(endpoint, {
+                method: "POST",
+                mode: "no-cors",
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8"
+                },
+                body: JSON.stringify(data)
             });
-
-            const response = await fetch(endpoint + "?" + query.toString(), {
-                method: "GET",
-                cache: "no-store"
-            });
-
-            if (!response.ok) throw new Error("Application server request failed.");
-
-            const result = await response.json();
-            if (!result.ok) throw new Error(result.error || "Application was not saved.");
 
             form.reset();
 
@@ -1333,28 +1329,13 @@ function renderEmployeeOfMonth(current, history) {
         historyBox.innerHTML = (history || []).map(item => `
             <div class="history-card">
                 <small>${bmEscape(item.month)}</small>
-                <h4>${bmEscape(item.name)}</h4>
-                <p>${bmEscape(item.rank)}</p>
+                <h4>${bmEscape(bmField(item, "name", "Name"))}</h4>
+                <p>${bmEscape(bmField(item, "rank", "Rank"))}</p>
             </div>
         `).join("");
 
     }
 
-}
-
-function bmField(obj, ...keys) {
-    for (const key of keys) {
-        if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
-    }
-    return "";
-}
-
-function bmImageUrl(value) {
-    let url = String(value || "").trim();
-    if (!url) return "https://via.placeholder.com/600x600?text=Bean+Machine";
-    const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/);
-    if (drive) return `https://drive.google.com/thumbnail?id=${drive[1]}&sz=w1000`;
-    return url;
 }
 
 function renderEmployees(employees) {
@@ -1370,18 +1351,18 @@ function renderEmployees(employees) {
 
     box.innerHTML = employees.map(employee => {
 
-        const rating = bmField(employee, "rating", "Rating")
-            ? Number(bmField(employee, "rating", "Rating")).toFixed(1)
+        const rating = employee.rating
+            ? Number(employee.rating).toFixed(1)
             : "0.0";
 
         return `
             <article class="profile-card">
-                <img src="${bmEscape(bmImageUrl(bmField(employee, "photo", "Photo")))}"
-                     alt="${bmEscape(bmField(employee, "name", "Name"))}">
+                <img src="${bmEscape(employee.photo || "https://via.placeholder.com/600x600?text=Bean+Machine")}"
+                     alt="${bmEscape(employee.name)}">
                 <div class="profile-card-content">
-                    <h3>${bmEscape(bmField(employee, "name", "Name"))}</h3>
-                    <p class="profile-rank">${bmEscape(bmField(employee, "rank", "Rank"))}</p>
-                    <p>${bmEscape(bmField(employee, "bio", "Bio"))}</p>
+                    <h3>${bmEscape(employee.name)}</h3>
+                    <p class="profile-rank">${bmEscape(employee.rank)}</p>
+                    <p>${bmEscape(employee.bio)}</p>
                     <p class="profile-rating">${bmStars(Math.round(Number(bmField(employee, "rating", "Rating") || 0)))} ${rating}/5</p>
                 </div>
             </article>
@@ -1400,7 +1381,7 @@ function populateReviewEmployees(employees) {
     select.innerHTML =
         '<option value="" selected disabled>Select an employee</option>' +
         employees.map(employee =>
-            `<option value="${bmEscape(bmField(employee, "name", "Name"))}">${bmEscape(bmField(employee, "name", "Name"))} — ${bmEscape(bmField(employee, "rank", "Rank"))}</option>`
+            `<option value="${bmEscape(employee.name)}">${bmEscape(employee.name)} — ${bmEscape(employee.rank)}</option>`
         ).join("");
 
 }
@@ -1448,7 +1429,7 @@ function renderApprovedReviews(reviews) {
                 <span class="leaderboard-stars">${bmStars(Number(bmField(item, "rating", "Rating")))}</span>
             </div>
             <p>${bmEscape(bmField(item, "message", "Message"))}</p>
-            <small>${bmEscape(item.reviewerName || "Bean Machine Guest")} • ${bmEscape(item.reviewType || "Service Review")}</small>
+            <small>${bmEscape(bmField(item, "reviewerName", "Reviewer Name") || "Bean Machine Guest")} • ${bmEscape(bmField(item, "reviewType", "Feedback Type") || "Service Review")}</small>
         </article>
     `).join("");
 
@@ -1496,8 +1477,8 @@ function renderManagedMenu(items) {
     box.innerHTML = items.length ? items.map(item => `
         <article class="food-card">
             <img src="${bmEscape(item.image || "https://via.placeholder.com/800x600?text=Bean+Machine")}"
-                 alt="${bmEscape(item.name)}">
-            <h3>${bmEscape(item.name)}</h3>
+                 alt="${bmEscape(bmField(item, "name", "Name"))}">
+            <h3>${bmEscape(bmField(item, "name", "Name"))}</h3>
             <p>${bmEscape(item.description || "")}</p>
             <span>${bmEscape(item.price || "")}</span>
         </article>
@@ -1587,105 +1568,77 @@ function initManagementDashboard() {
     const loginBox = document.getElementById("managementLogin");
     const panel = document.getElementById("dashboardPanel");
 
-    if (!loginButton || !dashboard) return;
+    if (!loginButton || !dashboard || !panel) return;
 
     let adminPin = sessionStorage.getItem("beanMachineAdminPin") || "";
 
     function bindDashboardTabs(data) {
         dashboard.querySelectorAll(".dashboard-tabs button").forEach(button => {
-            button.onclick = () => {
+            button.onclick = (event) => {
+                event.preventDefault();
                 dashboard.querySelectorAll(".dashboard-tabs button")
                     .forEach(item => item.classList.remove("active"));
                 button.classList.add("active");
-                panel.innerHTML = '<div class="live-loading">Loading...</div>';
+                panel.innerHTML = '<div class="application-status">Loading...</div>';
                 setTimeout(() => renderDashboardTab(button.dataset.tab, data, panel), 0);
             };
         });
     }
 
-    async function loadDashboard() {
-
-        try {
-
-            const data = await bmGet("admin", { pin: adminPin });
-
-            if (!data.ok) throw new Error(data.error || "Access denied.");
-
-            loginBox.hidden = true;
-            dashboard.hidden = false;
-
-            window.BEAN_MACHINE_ADMIN_DATA = data;
-
-            panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
-            setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
-
-            bindDashboardTabs(data);
-
-        } catch (error) {
-
-            sessionStorage.removeItem("beanMachineAdminPin");
-
-            if (loginStatus) {
-                loginStatus.className = "application-status error";
-                loginStatus.textContent = "Invalid management PIN or server configuration.";
-            }
-
-        }
-
+    async function loadDashboard(pin) {
+        const data = await bmGet("admin", { pin });
+        if (!data.ok) throw new Error(data.error || "Access denied.");
+        window.BEAN_MACHINE_ADMIN_DATA = data;
+        loginBox.hidden = true;
+        dashboard.hidden = false;
+        renderDashboardApplications(data.applications || [], panel);
+        const first = dashboard.querySelector('.dashboard-tabs button[data-tab="applications"]');
+        dashboard.querySelectorAll(".dashboard-tabs button").forEach(b => b.classList.remove("active"));
+        if (first) first.classList.add("active");
+        bindDashboardTabs(data);
+        return data;
     }
 
-    if (adminPin) loadDashboard();
+    async function tryLogin(pin, messageOnError) {
+        try {
+            await loadDashboard(pin);
+            sessionStorage.setItem("beanMachineAdminPin", pin);
+            adminPin = pin;
+            if (loginStatus) loginStatus.textContent = "";
+        } catch (error) {
+            sessionStorage.removeItem("beanMachineAdminPin");
+            if (loginStatus) {
+                loginStatus.className = "application-status error";
+                loginStatus.textContent = messageOnError || "Invalid management PIN or server configuration.";
+            }
+        }
+    }
 
-    loginButton.addEventListener("click", async () => {
+    if (adminPin) tryLogin(adminPin);
 
-        adminPin = pinInput.value.trim();
-
-        if (!adminPin) {
+    loginButton.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const pin = (pinInput.value || "").trim();
+        if (!pin) {
             loginStatus.textContent = "Enter the management PIN.";
             return;
         }
-
+        loginStatus.className = "application-status";
         loginStatus.textContent = "Checking access...";
-
-        try {
-
-            const data = await bmGet("admin", { pin: adminPin });
-
-            if (!data.ok) throw new Error();
-
-            sessionStorage.setItem("beanMachineAdminPin", adminPin);
-            window.BEAN_MACHINE_ADMIN_DATA = data;
-
-            loginBox.hidden = true;
-            dashboard.hidden = false;
-
-            panel.innerHTML = '<div class="live-loading">Loading applications...</div>';
-            setTimeout(() => renderDashboardApplications(data.applications || [], panel), 0);
-            bindDashboardTabs(data);
-
-        } catch (error) {
-
-            loginStatus.className = "application-status error";
-            loginStatus.textContent = "Invalid management PIN.";
-
-        }
-
+        await tryLogin(pin, "Invalid management PIN or server configuration.");
     });
 
     if (logoutButton) {
-
-        logoutButton.addEventListener("click", () => {
-
+        logoutButton.addEventListener("click", (event) => {
+            event.preventDefault();
             sessionStorage.removeItem("beanMachineAdminPin");
-
+            adminPin = "";
             dashboard.hidden = true;
             loginBox.hidden = false;
             pinInput.value = "";
-
+            if (loginStatus) loginStatus.textContent = "";
         });
-
     }
-
 }
 
 function renderDashboardTab(tab, data, panel) {
@@ -1709,8 +1662,8 @@ function renderDashboardApplications(applications, panel) {
     panel.innerHTML = `
         <div class="dashboard-card-grid">
             <div class="dashboard-stat"><strong>${applications.length}</strong><span>Total Applications</span></div>
-            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") || "Pending") === "Pending").length}</strong><span>Pending</span></div>
-            <div class="dashboard-stat"><strong>${applications.filter(x => bmField(x, "status", "Status") === "Accepted").length}</strong><span>Accepted</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") === "Pending") || !x.status).length}</strong><span>Pending</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => (bmField(x, "status", "Status") === "Accepted")).length}</strong><span>Accepted</span></div>
         </div>
 
         <div class="dashboard-form">
@@ -1860,7 +1813,7 @@ function renderDashboardReviews(reviews, panel) {
 
                 const target = reviews.find(x => String(x._row) === String(button.dataset.id));
 
-                if (target) { target.status = button.dataset.reviewAction; target.Status = button.dataset.reviewAction; }
+                if (target) target.status = button.dataset.reviewAction;
 
                 draw();
 
@@ -1884,7 +1837,7 @@ function renderDashboardEmployees(employees, panel) {
         <form id="employeeForm" class="dashboard-form">
             <input name="name" placeholder="Employee name" required>
             <input name="rank" placeholder="Rank" required>
-            <input name="photo" placeholder="Photo URL or Google Drive link" required>
+            <input name="photo" placeholder="Photo URL" required>
             <textarea name="bio" placeholder="Employee bio"></textarea>
             <button type="submit">Save Employee</button>
         </form>
@@ -1929,19 +1882,13 @@ function renderDashboardEmployees(employees, panel) {
 
         button.addEventListener("click", async () => {
 
-            if (!confirm("Delete this employee profile permanently?")) return;
-            try {
-                await bmPost({
-                    action: "delete_employee",
-                    pin: sessionStorage.getItem("beanMachineAdminPin"),
-                    row: button.dataset.employeeRow
-                });
-                const target = employees.find(x => String(x._row) === String(button.dataset.employeeRow));
-                if (target) target.Active = "false";
-                button.closest("tr").remove();
-            } catch (error) {
-                alert("Could not delete the employee. Please try again.");
-            }
+            await bmPost({
+                action: "delete_employee",
+                pin: sessionStorage.getItem("beanMachineAdminPin"),
+                row: button.dataset.employeeRow
+            });
+
+            button.closest("tr").remove();
 
         });
 
