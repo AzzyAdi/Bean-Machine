@@ -1181,10 +1181,13 @@ async function bmGet(action, params = {}) {
         throw new Error("Google Apps Script URL is not configured.");
     }
 
-    const query = new URLSearchParams({
-        action,
-        ...params
-    });
+    // Always keep the endpoint action as the authoritative `action` query
+    // parameter. Management mutations carry their specific operation in
+    // `mutationAction` so it cannot overwrite `action=admin_mutation`.
+    const queryParams = { ...params };
+    delete queryParams.action;
+    queryParams.action = action;
+    const query = new URLSearchParams(queryParams);
 
     const response = await fetch(endpoint + "?" + query.toString(), {
         method: "GET",
@@ -1220,7 +1223,11 @@ async function bmPost(payload) {
 
 async function bmAdminPost(payload) {
 
-    const data = await bmGet("admin_mutation", payload);
+    const mutationAction = payload && payload.action ? payload.action : "";
+    const mutationPayload = { ...payload, mutationAction };
+    delete mutationPayload.action;
+
+    const data = await bmGet("admin_mutation", mutationPayload);
 
     if (!data || data.ok !== true) {
         throw new Error((data && data.error) || "Management action failed.");
