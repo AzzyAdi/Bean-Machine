@@ -3347,3 +3347,14 @@ padding:35px;
     .nav-action i { font-size: 12px; }
     .navbar { gap: 8px; }
 }
+
+/* Management status and managed-content additions */
+.dashboard-status{display:inline-block;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.2px}
+.dashboard-status-pending{background:rgba(255,193,7,.14);color:#f0b232}
+.dashboard-status-interview{background:rgba(52,152,219,.14);color:#6db8ed}
+.dashboard-status-accepted,.dashboard-status-approved{background:rgba(46,204,113,.14);color:#5bd88a}
+.dashboard-status-rejected{background:rgba(231,76,60,.14);color:#f07b70}
+.dashboard-action button:disabled{opacity:.45;cursor:not-allowed}
+.managed-gallery-image-wrap{position:relative;overflow:hidden;border-radius:18px;min-height:220px}
+.managed-gallery-image-wrap .managed-gallery-image{display:block;width:100%;height:280px;object-fit:cover}
+.managed-gallery-caption{position:absolute;left:12px;right:12px;bottom:12px;padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.7);color:#fff;font-size:13px}
