@@ -18,8 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
     initHeroParallax();
     initRevealAnimation();
     initGalleryHover();
-    initNewsletter();
-    initContactForm();
+    initApplicationForm();
+    initBeanMachineLiveSystem();
+    initReviewForm();
+    initManagementDashboard();
 
 });
 
@@ -331,18 +333,37 @@ function initContactForm() {
 
     if (!form) return;
 
-    form.addEventListener("submit", function (e) {
+    form.addEventListener("submit", async function (e) {
 
         e.preventDefault();
 
-        alert("Thank you! Your message has been sent.");
+        const fields = form.querySelectorAll("input, textarea");
 
-        form.reset();
+        const data = {
+            action: "contact_message",
+            name: fields[0]?.value.trim() || "",
+            email: fields[1]?.value.trim() || "",
+            subject: fields[2]?.value.trim() || "",
+            message: fields[3]?.value.trim() || "",
+            submittedAt: new Date().toISOString()
+        };
+
+        try {
+
+            await bmPost(data);
+
+            alert("Thank you! Your message has been sent.");
+            form.reset();
+
+        } catch (error) {
+
+            alert("We could not send your message. Please try again.");
+
+        }
 
     });
 
 }
-
 /*====================================
     NEWSLETTER
 ====================================*/
@@ -354,30 +375,46 @@ function initNewsletter() {
 
     if (!button || !input) return;
 
-    button.addEventListener("click", function (e) {
+    button.addEventListener("click", async function (e) {
 
         e.preventDefault();
 
         const email = input.value.trim();
 
-        if (email === "") {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 
-            alert("Please enter your email address.");
-
+            alert("Please enter a valid email address.");
             input.focus();
-
             return;
 
         }
 
-        alert("Thank you for subscribing!");
+        button.disabled = true;
 
-        input.value = "";
+        try {
+
+            await bmPost({
+                action: "newsletter",
+                email,
+                submittedAt: new Date().toISOString()
+            });
+
+            alert("Thank you for subscribing!");
+            input.value = "";
+
+        } catch (error) {
+
+            alert("We could not complete your subscription. Please try again.");
+
+        } finally {
+
+            button.disabled = false;
+
+        }
 
     });
 
 }
-
 /*====================================
     Apply BUTTON
 ====================================*/
@@ -1026,3 +1063,1009 @@ console.log(" No Critical JavaScript Errors ");
 console.log(" Website Ready ");
 
 console.log("====================================");
+
+/*====================================
+    DIRECT JOB APPLICATION
+====================================*/
+
+function initApplicationForm() {
+
+    const form = document.getElementById("jobApplicationForm");
+    const status = document.getElementById("applicationStatus");
+
+    if (!form) return;
+
+    form.addEventListener("submit", async (event) => {
+
+        event.preventDefault();
+
+        const endpoint =
+            (window.BEAN_MACHINE_CONFIG &&
+             window.BEAN_MACHINE_CONFIG.GOOGLE_APPS_SCRIPT_URL) || "";
+
+        if (!endpoint ||
+            endpoint.includes("PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE")) {
+
+            if (status) {
+                status.className = "application-status error";
+                status.textContent =
+                    "The application system is not configured yet. Please contact Bean Machine management.";
+            }
+
+            return;
+        }
+
+        const submitButton = form.querySelector(".application-submit");
+
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML =
+                '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        }
+
+        if (status) {
+            status.className = "application-status";
+            status.textContent = "Submitting your application...";
+        }
+
+        const data = Object.fromEntries(new FormData(form).entries());
+
+        data.formType = "job_application";
+        data.source = "Bean Machine Website";
+        data.submittedAt = new Date().toISOString();
+
+        try {
+
+            // no-cors is intentional: Google Apps Script receives the POST,
+            // while the browser does not need to read the cross-origin response.
+            await fetch(endpoint, {
+                method: "POST",
+                mode: "no-cors",
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8"
+                },
+                body: JSON.stringify(data)
+            });
+
+            form.reset();
+
+            if (status) {
+                status.className = "application-status success";
+                status.textContent =
+                    "Application submitted successfully. Thank you for applying to Bean Machine!";
+            }
+
+            const popup = document.getElementById("popup");
+            if (popup) popup.classList.add("active");
+
+        } catch (error) {
+
+            console.error("Application submission error:", error);
+
+            if (status) {
+                status.className = "application-status error";
+                status.textContent =
+                    "We could not submit your application. Please try again or contact management.";
+            }
+
+        } finally {
+
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML =
+                    '<i class="fas fa-paper-plane"></i> Submit Application';
+            }
+
+        }
+
+    });
+
+}
+
+
+/*====================================
+    BEAN MACHINE LIVE SYSTEM
+====================================*/
+
+function bmConfig() {
+    return window.BEAN_MACHINE_CONFIG || {};
+}
+
+async function bmGet(action, params = {}) {
+
+    const endpoint = bmConfig().GOOGLE_APPS_SCRIPT_URL || "";
+
+    if (!endpoint || endpoint.includes("PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE")) {
+        throw new Error("Google Apps Script URL is not configured.");
+    }
+
+    const query = new URLSearchParams({
+        action,
+        ...params
+    });
+
+    const response = await fetch(endpoint + "?" + query.toString(), {
+        method: "GET",
+        cache: "no-store"
+    });
+
+    if (!response.ok) throw new Error("Server request failed.");
+
+    return await response.json();
+}
+
+async function bmPost(payload) {
+
+    const endpoint = bmConfig().GOOGLE_APPS_SCRIPT_URL || "";
+
+    if (!endpoint || endpoint.includes("PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE")) {
+        throw new Error("Google Apps Script URL is not configured.");
+    }
+
+    await fetch(endpoint, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+    });
+
+    // Google Apps Script receives the request. no-cors means the browser
+    // intentionally cannot inspect the response.
+    return { ok: true };
+}
+
+function bmEscape(value) {
+
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function bmStars(value) {
+
+    const n = Math.max(0, Math.min(5, Number(value) || 0));
+
+    return "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
+
+}
+
+async function initBeanMachineLiveSystem() {
+
+    try {
+
+        const data = await bmGet("public");
+
+        window.BEAN_MACHINE_PUBLIC_DATA = data;
+
+        if (data.maintenance && data.maintenance.enabled === true) {
+            showMaintenanceMode(data.maintenance.message);
+        }
+
+        renderEmployeeOfMonth(data.employeeOfMonth, data.employeeOfMonthHistory);
+        renderEmployees(data.employees || []);
+        renderReviewLeaderboard(data.reviewStats || []);
+        renderApprovedReviews(data.approvedReviews || []);
+        populateReviewEmployees(data.employees || []);
+        renderAnnouncements(data.announcements || []);
+        renderEvents(data.events || []);
+
+    } catch (error) {
+
+        console.warn("Bean Machine live system:", error);
+
+    }
+
+}
+
+function showMaintenanceMode(message) {
+
+    const notice = document.createElement("div");
+
+    notice.className = "maintenance-notice";
+
+    notice.innerHTML =
+        '<i class="fas fa-triangle-exclamation"></i>' +
+        '<strong>Bean Machine Website Notice</strong>' +
+        '<span>' + bmEscape(message || "The website is currently under maintenance.") + '</span>';
+
+    document.body.prepend(notice);
+
+}
+
+function renderEmployeeOfMonth(current, history) {
+
+    const name = document.getElementById("eomName");
+    const rank = document.getElementById("eomRank");
+    const message = document.getElementById("eomMessage");
+    const highlight = document.getElementById("eomHighlight");
+    const photo = document.getElementById("eomPhoto");
+    const month = document.getElementById("eomMonth");
+    const historyBox = document.getElementById("eomHistory");
+
+    if (!name) return;
+
+    if (!current) {
+
+        name.textContent = "Employee of the Month will be announced soon.";
+        rank.textContent = "";
+        message.textContent = "";
+        highlight.textContent = "";
+        return;
+
+    }
+
+    name.textContent = current.name || "Bean Machine Employee";
+    rank.textContent = current.rank || "";
+    message.textContent = current.message || "";
+    highlight.textContent = current.highlight || "";
+    month.textContent = current.month || "";
+
+    if (current.photo) {
+        photo.src = current.photo;
+    }
+
+    if (historyBox) {
+
+        historyBox.innerHTML = (history || []).map(item => `
+            <div class="history-card">
+                <small>${bmEscape(item.month)}</small>
+                <h4>${bmEscape(item.name)}</h4>
+                <p>${bmEscape(item.rank)}</p>
+            </div>
+        `).join("");
+
+    }
+
+}
+
+function renderEmployees(employees) {
+
+    const box = document.getElementById("employeeProfiles");
+
+    if (!box) return;
+
+    if (!employees.length) {
+        box.innerHTML = '<div class="live-empty">Employee profiles will appear here.</div>';
+        return;
+    }
+
+    box.innerHTML = employees.map(employee => {
+
+        const rating = employee.rating
+            ? Number(employee.rating).toFixed(1)
+            : "0.0";
+
+        return `
+            <article class="profile-card">
+                <img src="${bmEscape(employee.photo || "https://via.placeholder.com/600x600?text=Bean+Machine")}"
+                     alt="${bmEscape(employee.name)}">
+                <div class="profile-card-content">
+                    <h3>${bmEscape(employee.name)}</h3>
+                    <p class="profile-rank">${bmEscape(employee.rank)}</p>
+                    <p>${bmEscape(employee.bio)}</p>
+                    <p class="profile-rating">${bmStars(Math.round(Number(employee.rating || 0)))} ${rating}/5</p>
+                </div>
+            </article>
+        `;
+
+    }).join("");
+
+}
+
+function populateReviewEmployees(employees) {
+
+    const select = document.getElementById("reviewEmployee");
+
+    if (!select) return;
+
+    select.innerHTML =
+        '<option value="" selected disabled>Select an employee</option>' +
+        employees.map(employee =>
+            `<option value="${bmEscape(employee.name)}">${bmEscape(employee.name)} — ${bmEscape(employee.rank)}</option>`
+        ).join("");
+
+}
+
+function renderReviewLeaderboard(stats) {
+
+    const box = document.getElementById("ratingLeaderboard");
+
+    if (!box) return;
+
+    if (!stats.length) {
+        box.innerHTML = '<div class="live-empty">No approved staff ratings yet.</div>';
+        return;
+    }
+
+    box.innerHTML = stats.map((item, index) => `
+        <div class="leaderboard-row">
+            <div>
+                <strong>${index + 1}. ${bmEscape(item.employee)}</strong>
+                <small>${Number(item.count || 0)} approved review(s)</small>
+            </div>
+            <div class="leaderboard-stars">
+                ${bmStars(Math.round(Number(item.average || 0)))} ${Number(item.average || 0).toFixed(1)}
+            </div>
+        </div>
+    `).join("");
+
+}
+
+function renderApprovedReviews(reviews) {
+
+    const box = document.getElementById("approvedReviews");
+
+    if (!box) return;
+
+    if (!reviews.length) {
+        box.innerHTML = '<div class="live-empty">No approved reviews yet.</div>';
+        return;
+    }
+
+    box.innerHTML = reviews.map(item => `
+        <article class="approved-review-card">
+            <div class="approved-review-top">
+                <strong>${bmEscape(item.employee)}</strong>
+                <span class="leaderboard-stars">${bmStars(Number(item.rating))}</span>
+            </div>
+            <p>${bmEscape(item.message)}</p>
+            <small>${bmEscape(item.reviewerName || "Bean Machine Guest")} • ${bmEscape(item.reviewType || "Service Review")}</small>
+        </article>
+    `).join("");
+
+}
+
+function renderAnnouncements(items) {
+
+    const box = document.getElementById("announcementsList");
+
+    if (!box) return;
+
+    box.innerHTML = items.length ? items.map(item => `
+        <article class="update-card">
+            <span class="update-date">${bmEscape(item.date)}</span>
+            <h4>${bmEscape(item.title)}</h4>
+            <p>${bmEscape(item.message)}</p>
+        </article>
+    `).join("") : '<div class="live-empty">No announcements.</div>';
+
+}
+
+function renderEvents(items) {
+
+    const box = document.getElementById("eventsList");
+
+    if (!box) return;
+
+    box.innerHTML = items.length ? items.map(item => `
+        <article class="update-card">
+            <span class="update-date">${bmEscape(item.date)}${item.time ? " • " + bmEscape(item.time) : ""}</span>
+            <h4>${bmEscape(item.title)}</h4>
+            <p>${bmEscape(item.location || "")}</p>
+            <p>${bmEscape(item.description || "")}</p>
+        </article>
+    `).join("") : '<div class="live-empty">No upcoming events.</div>';
+
+}
+
+function renderManagedMenu(items) {
+
+    const box = document.getElementById("managedMenuGrid");
+
+    if (!box) return;
+
+    box.innerHTML = items.length ? items.map(item => `
+        <article class="food-card">
+            <img src="${bmEscape(item.image || "https://via.placeholder.com/800x600?text=Bean+Machine")}"
+                 alt="${bmEscape(item.name)}">
+            <h3>${bmEscape(item.name)}</h3>
+            <p>${bmEscape(item.description || "")}</p>
+            <span>${bmEscape(item.price || "")}</span>
+        </article>
+    `).join("") : '<div class="live-empty">No managed menu items yet.</div>';
+
+}
+
+function renderManagedGallery(items) {
+
+    const box = document.getElementById("managedGalleryGrid");
+
+    if (!box) return;
+
+    box.innerHTML = items.length ? items.map(item => `
+        <article class="managed-gallery-item">
+            <img src="${bmEscape(item.image)}" alt="${bmEscape(item.title || "Bean Machine Gallery")}">
+            <div class="managed-gallery-caption">${bmEscape(item.title || "")}</div>
+        </article>
+    `).join("") : '<div class="live-empty">No managed gallery images yet.</div>';
+
+}
+
+function initReviewForm() {
+
+    const form = document.getElementById("staffReviewForm");
+    const status = document.getElementById("reviewStatus");
+
+    if (!form) return;
+
+    form.addEventListener("submit", async event => {
+
+        event.preventDefault();
+
+        const button = form.querySelector("button[type=submit]");
+
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+        }
+
+        const data = Object.fromEntries(new FormData(form).entries());
+
+        data.formType = "staff_review";
+        data.submittedAt = new Date().toISOString();
+
+        try {
+
+            await bmPost(data);
+
+            form.reset();
+
+            if (status) {
+                status.className = "application-status success";
+                status.textContent =
+                    "Thank you. Your feedback was submitted for management review.";
+            }
+
+        } catch (error) {
+
+            if (status) {
+                status.className = "application-status error";
+                status.textContent =
+                    "We could not submit the feedback. Please try again.";
+            }
+
+        } finally {
+
+            if (button) {
+                button.disabled = false;
+                button.innerHTML =
+                    '<i class="fas fa-star"></i> Submit Staff Feedback';
+            }
+
+        }
+
+    });
+
+}
+
+function initManagementDashboard() {
+
+    const loginButton = document.getElementById("managementLoginBtn");
+    const logoutButton = document.getElementById("managementLogout");
+    const pinInput = document.getElementById("managementPin");
+    const loginStatus = document.getElementById("managementLoginStatus");
+    const dashboard = document.getElementById("managementDashboard");
+    const loginBox = document.getElementById("managementLogin");
+    const panel = document.getElementById("dashboardPanel");
+
+    if (!loginButton || !dashboard) return;
+
+    let adminPin = sessionStorage.getItem("beanMachineAdminPin") || "";
+
+    async function loadDashboard() {
+
+        try {
+
+            const data = await bmGet("admin", { pin: adminPin });
+
+            if (!data.ok) throw new Error(data.error || "Access denied.");
+
+            loginBox.hidden = true;
+            dashboard.hidden = false;
+
+            window.BEAN_MACHINE_ADMIN_DATA = data;
+
+            renderDashboardApplications(data.applications || [], panel);
+
+            dashboard.querySelectorAll(".dashboard-tabs button").forEach(button => {
+
+                button.onclick = () => {
+
+                    dashboard.querySelectorAll(".dashboard-tabs button")
+                        .forEach(item => item.classList.remove("active"));
+
+                    button.classList.add("active");
+
+                    renderDashboardTab(button.dataset.tab, data, panel);
+
+                };
+
+            });
+
+        } catch (error) {
+
+            sessionStorage.removeItem("beanMachineAdminPin");
+
+            if (loginStatus) {
+                loginStatus.className = "application-status error";
+                loginStatus.textContent = "Invalid management PIN or server configuration.";
+            }
+
+        }
+
+    }
+
+    if (adminPin) loadDashboard();
+
+    loginButton.addEventListener("click", async () => {
+
+        adminPin = pinInput.value.trim();
+
+        if (!adminPin) {
+            loginStatus.textContent = "Enter the management PIN.";
+            return;
+        }
+
+        loginStatus.textContent = "Checking access...";
+
+        try {
+
+            const data = await bmGet("admin", { pin: adminPin });
+
+            if (!data.ok) throw new Error();
+
+            sessionStorage.setItem("beanMachineAdminPin", adminPin);
+            window.BEAN_MACHINE_ADMIN_DATA = data;
+
+            loginBox.hidden = true;
+            dashboard.hidden = false;
+
+            renderDashboardApplications(data.applications || [], panel);
+
+        } catch (error) {
+
+            loginStatus.className = "application-status error";
+            loginStatus.textContent = "Invalid management PIN.";
+
+        }
+
+    });
+
+    if (logoutButton) {
+
+        logoutButton.addEventListener("click", () => {
+
+            sessionStorage.removeItem("beanMachineAdminPin");
+
+            dashboard.hidden = true;
+            loginBox.hidden = false;
+            pinInput.value = "";
+
+        });
+
+    }
+
+}
+
+function renderDashboardTab(tab, data, panel) {
+
+    if (tab === "applications") {
+        renderDashboardApplications(data.applications || [], panel);
+    } else if (tab === "reviews") {
+        renderDashboardReviews(data.reviews || [], panel);
+    } else if (tab === "employees") {
+        renderDashboardEmployees(data.employees || [], panel);
+    } else if (tab === "content") {
+        renderDashboardContent(data, panel);
+    } else if (tab === "settings") {
+        renderDashboardSettings(data.settings || {}, panel);
+    }
+
+}
+
+function renderDashboardApplications(applications, panel) {
+
+    panel.innerHTML = `
+        <div class="dashboard-card-grid">
+            <div class="dashboard-stat"><strong>${applications.length}</strong><span>Total Applications</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => x.status === "Pending" || !x.status).length}</strong><span>Pending</span></div>
+            <div class="dashboard-stat"><strong>${applications.filter(x => x.status === "Accepted").length}</strong><span>Accepted</span></div>
+        </div>
+
+        <div class="dashboard-form">
+            <input id="applicationSearch" type="search" placeholder="Search name, CID, Discord, phone or family...">
+        </div>
+
+        <div id="applicationTable" class="dashboard-table-wrap"></div>
+    `;
+
+    const search = panel.querySelector("#applicationSearch");
+    const table = panel.querySelector("#applicationTable");
+
+    function draw() {
+
+        const term = (search.value || "").toLowerCase();
+
+        const filtered = applications.filter(item =>
+            JSON.stringify(item).toLowerCase().includes(term)
+        );
+
+        table.innerHTML = `
+            <table class="dashboard-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Applicant</th>
+                        <th>CID / Discord</th>
+                        <th>Family / Gang / Organization / Citizen</th>
+                        <th>Availability</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.map(item => `
+                        <tr>
+                            <td>${bmEscape(item.Timestamp || item.timestamp || "")}</td>
+                            <td><strong>${bmEscape(item["Name (in city)"] || item.name)}</strong><br>${bmEscape(item.Phone || item.phone)}</td>
+                            <td>${bmEscape(item.CID || item.cid)}<br>${bmEscape(item["Discord Username"] || item.discord)}</td>
+                            <td>${bmEscape(item["Family Name"] || item.family)}</td>
+                            <td>${bmEscape(item["Flexible Hours"] || item.flexibleHours)}</td>
+                            <td>${bmEscape(item.status || "Pending")}</td>
+                            <td>
+                                <div class="dashboard-action">
+                                    <button data-app-action="Interview" data-id="${bmEscape(item._row)}">Interview</button>
+                                    <button data-app-action="Accepted" data-id="${bmEscape(item._row)}">Accept</button>
+                                    <button data-app-action="Rejected" data-id="${bmEscape(item._row)}">Reject</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+
+        table.querySelectorAll("[data-app-action]").forEach(button => {
+
+            button.addEventListener("click", async () => {
+
+                await bmPost({
+                    action: "update_application",
+                    pin: sessionStorage.getItem("beanMachineAdminPin"),
+                    row: button.dataset.id,
+                    status: button.dataset.appAction
+                });
+
+                const target = applications.find(x => String(x._row) === String(button.dataset.id));
+
+                if (target) target.status = button.dataset.appAction;
+
+                draw();
+
+            });
+
+        });
+
+    }
+
+    search.addEventListener("input", draw);
+
+    draw();
+
+}
+
+function renderDashboardReviews(reviews, panel) {
+
+    panel.innerHTML = `
+        <div class="dashboard-form">
+            <input id="reviewSearch" type="search" placeholder="Search employee, reviewer or message...">
+        </div>
+        <div id="reviewTable" class="dashboard-table-wrap"></div>
+    `;
+
+    const search = panel.querySelector("#reviewSearch");
+    const table = panel.querySelector("#reviewTable");
+
+    function draw() {
+
+        const term = (search.value || "").toLowerCase();
+
+        const filtered = reviews.filter(item =>
+            JSON.stringify(item).toLowerCase().includes(term)
+        );
+
+        table.innerHTML = `
+            <table class="dashboard-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Employee</th>
+                        <th>Rating</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                        <th>Moderation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.map(item => `
+                        <tr>
+                            <td>${bmEscape(item.Timestamp || "")}</td>
+                            <td>${bmEscape(item.employee)}</td>
+                            <td>${bmStars(Number(item.rating))}</td>
+                            <td>${bmEscape(item.reviewType)}</td>
+                            <td>${bmEscape(item.message)}</td>
+                            <td>
+                                <div class="dashboard-action">
+                                    <button data-review-action="Approved" data-id="${bmEscape(item._row)}">Approve</button>
+                                    <button data-review-action="Rejected" data-id="${bmEscape(item._row)}">Reject</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+
+        table.querySelectorAll("[data-review-action]").forEach(button => {
+
+            button.addEventListener("click", async () => {
+
+                await bmPost({
+                    action: "moderate_review",
+                    pin: sessionStorage.getItem("beanMachineAdminPin"),
+                    row: button.dataset.id,
+                    status: button.dataset.reviewAction
+                });
+
+                const target = reviews.find(x => String(x._row) === String(button.dataset.id));
+
+                if (target) target.status = button.dataset.reviewAction;
+
+                draw();
+
+            });
+
+        });
+
+    }
+
+    search.addEventListener("input", draw);
+
+    draw();
+
+}
+
+function renderDashboardEmployees(employees, panel) {
+
+    panel.innerHTML = `
+        <h3>Employee Profiles</h3>
+
+        <form id="employeeForm" class="dashboard-form">
+            <input name="name" placeholder="Employee name" required>
+            <input name="rank" placeholder="Rank" required>
+            <input name="photo" placeholder="Photo URL" required>
+            <textarea name="bio" placeholder="Employee bio"></textarea>
+            <button type="submit">Save Employee</button>
+        </form>
+
+        <div class="dashboard-table-wrap">
+            <table class="dashboard-table">
+                <thead>
+                    <tr><th>Name</th><th>Rank</th><th>Rating</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    ${employees.map(item => `
+                        <tr>
+                            <td>${bmEscape(item.name)}</td>
+                            <td>${bmEscape(item.rank)}</td>
+                            <td>${Number(item.rating || 0).toFixed(1)}</td>
+                            <td><button data-employee-row="${bmEscape(item._row)}">Delete</button></td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    panel.querySelector("#employeeForm").addEventListener("submit", async event => {
+
+        event.preventDefault();
+
+        const formData = Object.fromEntries(new FormData(event.target).entries());
+
+        await bmPost({
+            action: "save_employee",
+            pin: sessionStorage.getItem("beanMachineAdminPin"),
+            ...formData
+        });
+
+        event.target.reset();
+        panel.innerHTML += '<p class="application-status success">Employee saved. Refresh the dashboard to see the update.</p>';
+
+    });
+
+    panel.querySelectorAll("[data-employee-row]").forEach(button => {
+
+        button.addEventListener("click", async () => {
+
+            await bmPost({
+                action: "delete_employee",
+                pin: sessionStorage.getItem("beanMachineAdminPin"),
+                row: button.dataset.employeeRow
+            });
+
+            button.closest("tr").remove();
+
+        });
+
+    });
+
+}
+
+function renderDashboardContent(data, panel) {
+
+    panel.innerHTML = `
+        <h3>Employee of the Month</h3>
+
+        <form id="eomForm" class="dashboard-form">
+            <input name="month" placeholder="Month e.g. September 2026" required>
+            <input name="name" placeholder="Employee name" required>
+            <input name="rank" placeholder="Rank">
+            <input name="photo" placeholder="Photo URL">
+            <textarea name="message" placeholder="Award message"></textarea>
+            <textarea name="highlight" placeholder="Highlight / reason"></textarea>
+            <button type="submit">Set Employee of the Month</button>
+        </form>
+
+        <h3 style="margin-top:30px;">Announcements</h3>
+
+        <form id="announcementForm" class="dashboard-form">
+            <input name="title" placeholder="Announcement title" required>
+            <textarea name="message" placeholder="Announcement message" required></textarea>
+            <input name="date" placeholder="Date">
+            <button type="submit">Publish Announcement</button>
+        </form>
+
+        <h3 style="margin-top:30px;">Events</h3>
+
+        <form id="eventForm" class="dashboard-form">
+            <input name="title" placeholder="Event title" required>
+            <input name="date" placeholder="Date" required>
+            <input name="time" placeholder="Time">
+            <input name="location" placeholder="Location">
+            <textarea name="description" placeholder="Description"></textarea>
+            <button type="submit">Add Event</button>
+        </form>
+
+        <h3 style="margin-top:30px;">Menu Item</h3>
+
+        <form id="menuForm" class="dashboard-form">
+            <input name="name" placeholder="Item name" required>
+            <input name="price" placeholder="Price">
+            <input name="image" placeholder="Image URL">
+            <textarea name="description" placeholder="Description"></textarea>
+            <button type="submit">Add Menu Item</button>
+        </form>
+
+        <h3 style="margin-top:30px;">Gallery Image</h3>
+
+        <form id="galleryForm" class="dashboard-form">
+            <input name="title" placeholder="Gallery title">
+            <input name="image" placeholder="Image URL" required>
+            <button type="submit">Add Gallery Image</button>
+        </form>
+    `;
+
+    bindContentForm("eomForm", "save_eom");
+    bindContentForm("announcementForm", "save_announcement");
+    bindContentForm("eventForm", "save_event");
+    bindContentForm("menuForm", "save_menu");
+    bindContentForm("galleryForm", "save_gallery");
+
+}
+
+function bindContentForm(formId, action) {
+
+    const form = document.getElementById(formId);
+
+    if (!form) return;
+
+    form.addEventListener("submit", async event => {
+
+        event.preventDefault();
+
+        const values = Object.fromEntries(new FormData(form).entries());
+
+        await bmPost({
+            action,
+            pin: sessionStorage.getItem("beanMachineAdminPin"),
+            ...values
+        });
+
+        form.reset();
+
+        const note = document.createElement("div");
+        note.className = "application-status success";
+        note.textContent = "Saved. Refresh the public data after the change.";
+        form.after(note);
+
+    });
+
+}
+
+function renderDashboardSettings(settings, panel) {
+
+    const checked = key =>
+        String(settings[key] || "").toLowerCase() === "true" ? "checked" : "";
+
+    panel.innerHTML = `
+        <h3>Website & Discord Settings</h3>
+
+        <form id="settingsForm" class="dashboard-form">
+
+            <label>
+                <input type="checkbox" name="notifyApplications" ${checked("notifyApplications")}>
+                Discord notifications for applications
+            </label>
+
+            <label>
+                <input type="checkbox" name="notifyReviews" ${checked("notifyReviews")}>
+                Discord notifications for staff feedback
+            </label>
+
+            <label>
+                <input type="checkbox" name="notifyContact" ${checked("notifyContact")}>
+                Discord notifications for contact messages
+            </label>
+
+            <label>
+                <input type="checkbox" name="notifyNewsletter" ${checked("notifyNewsletter")}>
+                Discord notifications for newsletter subscriptions
+            </label>
+
+            <label>
+                <input type="checkbox" name="maintenanceEnabled" ${checked("maintenanceEnabled")}>
+                Maintenance mode
+            </label>
+
+            <input name="maintenanceMessage" value="${bmEscape(settings.maintenanceMessage || "Bean Machine website is currently under maintenance.")}" placeholder="Maintenance message">
+
+            <button type="submit">Save Settings</button>
+
+        </form>
+
+        <p style="margin-top:18px;color:#999;">
+            The Discord webhook itself stays private in Apps Script Script Properties.
+        </p>
+    `;
+
+    panel.querySelector("#settingsForm").addEventListener("submit", async event => {
+
+        event.preventDefault();
+
+        const form = new FormData(event.target);
+
+        await bmPost({
+            action: "save_settings",
+            pin: sessionStorage.getItem("beanMachineAdminPin"),
+            notifyApplications: form.get("notifyApplications") === "on",
+            notifyReviews: form.get("notifyReviews") === "on",
+            notifyContact: form.get("notifyContact") === "on",
+            notifyNewsletter: form.get("notifyNewsletter") === "on",
+            maintenanceEnabled: form.get("maintenanceEnabled") === "on",
+            maintenanceMessage: form.get("maintenanceMessage") || ""
+        });
+
+        event.target.insertAdjacentHTML(
+            "afterend",
+            '<div class="application-status success">Settings saved.</div>'
+        );
+
+    });
+
+}
