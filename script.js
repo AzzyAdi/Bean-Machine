@@ -1340,6 +1340,7 @@ function renderEmployeeOfMonth(current, history) {
     const message = document.getElementById("eomMessage");
     const highlight = document.getElementById("eomHighlight");
     const photo = document.getElementById("eomPhoto");
+    const month = document.getElementById("eomMonth");
     const historyBox = document.getElementById("eomHistory");
 
     if (!name) return;
@@ -1381,7 +1382,11 @@ function renderEmployeeOfMonth(current, history) {
 
     if (historyBox) {
         historyBox.innerHTML = (history || []).map(item => `
-           
+            <div class="history-card">
+                <small>${bmEscape(bmField(item, "Month", "month"))}</small>
+                <h4>${bmEscape(bmField(item, "Name", "name"))}</h4>
+                <p>${bmEscape(bmField(item, "Rank", "rank"))}</p>
+            </div>
         `).join("");
     }
 
