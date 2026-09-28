@@ -1382,11 +1382,7 @@ function renderEmployeeOfMonth(current, history) {
 
     if (historyBox) {
         historyBox.innerHTML = (history || []).map(item => `
-            <div class="history-card">
-                <small>${bmEscape(bmField(item, "Month", "month"))}</small>
-                <h4>${bmEscape(bmField(item, "Name", "name"))}</h4>
-                <p>${bmEscape(bmField(item, "Rank", "rank"))}</p>
-            </div>
+
         `).join("");
     }
 
