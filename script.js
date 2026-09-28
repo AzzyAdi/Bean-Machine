@@ -1013,7 +1013,7 @@ document.querySelectorAll("img").forEach(img=>{
 
 img.onerror=function(){
 
-this.style.opacity="25.25";
+this.style.opacity=".60";
 
 this.alt="Image Missing";
 
