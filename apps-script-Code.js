@@ -183,6 +183,25 @@ function doGet(e) {
       return adminData_(e.parameter.pin || "");
     }
 
+    // Management mutations use GET so the GitHub Pages frontend can read
+    // the Apps Script response. Public form submissions still use POST/no-cors.
+    if (action === "admin_mutation") {
+      requireAdmin_(e.parameter.pin || "");
+      return handleAdminMutation_(e.parameter);
+    }
+
+    // Backwards compatibility for an older/cached frontend that accidentally
+    // sends the mutation name itself as the top-level action parameter.
+    const directMutationActions = [
+      "update_application", "moderate_review", "save_employee", "delete_employee",
+      "delete_application", "delete_review", "save_eom", "delete_eom", "save_announcement", "delete_announcement",
+      "save_event", "delete_event", "save_menu", "save_gallery", "save_settings"
+    ];
+    if (directMutationActions.indexOf(action) !== -1) {
+      requireAdmin_(e.parameter.pin || "");
+      return handleAdminMutation_({ ...e.parameter, mutationAction: action });
+    }
+
     if (action === "test_webhook") {
       requireAdmin_(e.parameter.pin || "");
       const type = String(e.parameter.type || "APPLICATIONS").toUpperCase();
@@ -349,106 +368,22 @@ function doPost(e) {
         return handleNewsletter_(data);
 
       case "update_application":
-        requireAdmin_(data.pin);
-        const applicationStatuses = ["Pending", "Interview", "Accepted", "Rejected"];
-        if (applicationStatuses.indexOf(String(data.status)) === -1) {
-          throw new Error("Invalid application status.");
-        }
-        updateRow_("Applications", data.row, {
-          "Status": String(data.status)
-        });
-        notifyStatusChange_(data);
-        return json_({ok:true});
-
       case "moderate_review":
-        requireAdmin_(data.pin);
-        const reviewStatuses = ["Approved", "Rejected", "Pending"];
-        if (reviewStatuses.indexOf(String(data.status)) === -1) {
-          throw new Error("Invalid review status.");
-        }
-        updateRow_("Reviews", data.row, {
-          "Status": String(data.status)
-        });
-        return json_({ok:true});
-
       case "save_employee":
-        requireAdmin_(data.pin);
-        appendRow_("Employees", [
-          clean_(data.name),
-          clean_(data.rank),
-          clean_(data.photo),
-          clean_(data.bio),
-          "true"
-        ]);
-        return json_({ok:true});
-
       case "delete_employee":
-        requireAdmin_(data.pin);
-        deleteRow_("Employees", data.row);
-        return json_({ok:true});
-
+      case "delete_application":
+      case "delete_review":
       case "save_eom":
-        requireAdmin_(data.pin);
-        appendRow_("EmployeeOfMonth", [
-          clean_(data.month),
-          clean_(data.name),
-          clean_(data.rank),
-          clean_(data.photo),
-          clean_(data.message),
-          clean_(data.highlight),
-          new Date()
-        ]);
-        notifySimple_("🏆 Employee of the Month Updated", data.name + " was selected as Employee of the Month for " + data.month + ".");
-        return json_({ok:true});
-
+      case "delete_eom":
       case "save_announcement":
-        requireAdmin_(data.pin);
-        appendRow_("Announcements", [
-          clean_(data.date || new Date()),
-          clean_(data.title),
-          clean_(data.message),
-          "true"
-        ]);
-        notifySimple_("📢 Bean Machine Announcement", data.title + "\n" + data.message);
-        return json_({ok:true});
-
+      case "delete_announcement":
       case "save_event":
-        requireAdmin_(data.pin);
-        appendRow_("Events", [
-          clean_(data.date),
-          clean_(data.time),
-          clean_(data.title),
-          clean_(data.location),
-          clean_(data.description),
-          "true"
-        ]);
-        notifySimple_("📅 Bean Machine Event", data.title + "\n" + data.date + " " + data.time);
-        return json_({ok:true});
-
+      case "delete_event":
       case "save_menu":
-        requireAdmin_(data.pin);
-        appendRow_("Menu", [
-          clean_(data.name),
-          clean_(data.price),
-          clean_(data.image),
-          clean_(data.description),
-          "true"
-        ]);
-        return json_({ok:true});
-
       case "save_gallery":
-        requireAdmin_(data.pin);
-        appendRow_("Gallery", [
-          clean_(data.title),
-          clean_(data.image),
-          "true"
-        ]);
-        return json_({ok:true});
-
       case "save_settings":
         requireAdmin_(data.pin);
-        saveSettings_(data);
-        return json_({ok:true});
+        return handleAdminMutation_(data);
 
       default:
         return json_({ok:false, error:"Unknown action."});
@@ -466,6 +401,113 @@ function doPost(e) {
 
   }
 
+}
+
+function handleAdminMutation_(data) {
+
+  // Management requests use action=admin_mutation at the HTTP layer.
+  // The actual operation is carried separately as mutationAction.
+  // Keep data.action as a backwards-compatible fallback for older clients.
+  const action = String(data.mutationAction || data.action || "");
+
+  switch (action) {
+
+    case "update_application": {
+      const applicationStatuses = ["Pending", "Interview", "Accepted", "Rejected"];
+      const status = String(data.status || "");
+      if (applicationStatuses.indexOf(status) === -1) throw new Error("Invalid application status.");
+
+      const sh = sheet_().getSheetByName("Applications");
+      const row = Number(data.row);
+      if (!sh || !row || row < 2 || row > sh.getLastRow()) throw new Error("Invalid application.");
+      const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      const statusCol = headers.indexOf("Status") + 1;
+      if (!statusCol) throw new Error("Applications sheet is missing the Status column.");
+      const current = String(sh.getRange(row, statusCol).getValue() || "Pending");
+      if (current === status) throw new Error("This application is already marked " + status + ".");
+
+      sh.getRange(row, statusCol).setValue(status);
+      const notification = notifyStatusChange_(data);
+      return json_({ok:true, action, row, status, notification});
+    }
+
+    case "moderate_review": {
+      const reviewStatuses = ["Approved", "Rejected", "Pending"];
+      const status = String(data.status || "");
+      if (reviewStatuses.indexOf(status) === -1) throw new Error("Invalid review status.");
+
+      const sh = sheet_().getSheetByName("Reviews");
+      const row = Number(data.row);
+      if (!sh || !row || row < 2 || row > sh.getLastRow()) throw new Error("Invalid review.");
+      const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      const statusCol = headers.indexOf("Status") + 1;
+      if (!statusCol) throw new Error("Reviews sheet is missing the Status column.");
+      const current = String(sh.getRange(row, statusCol).getValue() || "Pending");
+      if (current === status) throw new Error("This review is already marked " + status + ".");
+
+      sh.getRange(row, statusCol).setValue(status);
+      const notification = notifySimple_("⭐ Review Moderated", "Review row " + row + " was marked " + status + ".", "REVIEWS");
+      return json_({ok:true, action, row, status, notification});
+    }
+
+    case "save_employee":
+      appendRow_("Employees", [clean_(data.name), clean_(data.rank), clean_(data.photo), clean_(data.bio), "true"]);
+      return json_({ok:true, action, message:"Employee saved."});
+
+    case "delete_employee":
+      deleteRow_("Employees", data.row);
+      return json_({ok:true, action, message:"Employee deleted."});
+
+    case "delete_application":
+      deleteRow_("Applications", data.row);
+      return json_({ok:true, action, message:"Application deleted."});
+
+    case "delete_review":
+      deleteRow_("Reviews", data.row);
+      return json_({ok:true, action, message:"Review deleted."});
+
+    case "delete_eom":
+      deleteRow_("EmployeeOfMonth", data.row);
+      return json_({ok:true, action, message:"Employee of the Month record deleted."});
+
+    case "delete_announcement":
+      deleteRow_("Announcements", data.row);
+      return json_({ok:true, action, message:"Announcement deleted."});
+
+    case "delete_event":
+      deleteRow_("Events", data.row);
+      return json_({ok:true, action, message:"Event deleted."});
+
+    case "save_eom":
+      appendRow_("EmployeeOfMonth", [clean_(data.month), clean_(data.name), clean_(data.rank), clean_(data.photo), clean_(data.message), clean_(data.highlight), new Date()]);
+      notifySimple_("🏆 Employee of the Month Updated", data.name + " was selected as Employee of the Month for " + data.month + ".", "GENERAL");
+      return json_({ok:true, action, message:"Employee of the Month saved."});
+
+    case "save_announcement":
+      appendRow_("Announcements", [clean_(data.date || new Date()), clean_(data.title), clean_(data.message), "true"]);
+      notifySimple_("📢 Bean Machine Announcement", data.title + "\n" + data.message, "GENERAL");
+      return json_({ok:true, action, message:"Announcement published."});
+
+    case "save_event":
+      appendRow_("Events", [clean_(data.date), clean_(data.time), clean_(data.title), clean_(data.location), clean_(data.description), "true"]);
+      notifySimple_("📅 Bean Machine Event", data.title + "\n" + data.date + " " + data.time, "GENERAL");
+      return json_({ok:true, action, message:"Event added."});
+
+    case "save_menu":
+      appendRow_("Menu", [clean_(data.name), clean_(data.price), clean_(data.image), clean_(data.description), "true"]);
+      return json_({ok:true, action, message:"Menu item added."});
+
+    case "save_gallery":
+      appendRow_("Gallery", [clean_(data.title), clean_(data.image), "true"]);
+      return json_({ok:true, action, message:"Gallery image added."});
+
+    case "save_settings":
+      saveSettings_(data);
+      return json_({ok:true, action, message:"Settings saved."});
+
+    default:
+      throw new Error("Unknown management action.");
+  }
 }
 
 function handleApplication_(data) {
