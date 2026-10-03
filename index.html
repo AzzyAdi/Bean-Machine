@@ -1151,6 +1151,41 @@ Submit Application
 
 
 <!-- ========================= -->
+<!-- PRIORITY CUSTOMER CLUB -->
+<!-- ========================= -->
+<section id="priority" class="live-section priority-section">
+<div class="container">
+  <div class="title">
+    <h4>BEAN MACHINE PRIORITY CLUB</h4>
+    <h2>Priority Customers & Exclusive Offers</h2>
+    <p>Priority members receive special offers, recognition and premium Bean Machine treatment.</p>
+  </div>
+  <div class="priority-hero">
+    <div class="priority-copy">
+      <span class="priority-pill"><i class="fas fa-gem"></i> Priority Access</span>
+      <h3>More than a ticket. It's your Bean Machine membership.</h3>
+      <p>Management-approved customers can be featured here with their photo, membership tier, offer and validity. Every membership is verified by a unique ticket ID.</p>
+      <div class="priority-benefits">
+        <span><i class="fas fa-check"></i> Exclusive offers</span>
+        <span><i class="fas fa-check"></i> Priority service</span>
+        <span><i class="fas fa-check"></i> Member recognition</span>
+      </div>
+    </div>
+    <div class="priority-verify">
+      <div class="verify-icon"><i class="fas fa-qrcode"></i></div>
+      <h3>Verify a Priority Ticket</h3>
+      <p>Enter a ticket ID supplied by Bean Machine management.</p>
+      <div class="verify-row"><input id="priorityVerifyInput" type="text" placeholder="BM-PRIORITY-10482"><button id="priorityVerifyButton">Verify</button></div>
+      <div id="priorityVerifyResult" class="verify-result" aria-live="polite"></div>
+    </div>
+  </div>
+  <div id="priorityCustomers" class="priority-grid"><div class="live-loading">Loading Priority Club...</div></div>
+  <div class="subsection-heading"><h3>Exclusive Offers</h3><p>Current offers available to eligible Priority Club members.</p></div>
+  <div id="priorityOffersList" class="offer-grid"></div>
+</div>
+</section>
+
+<!-- ========================= -->
 <!-- LIVE BEAN MACHINE SYSTEM -->
 <!-- ========================= -->
 
@@ -1212,6 +1247,12 @@ Submit Application
 <div class="live-loading">Loading employee profiles...</div>
 
 </div>
+
+<div class="subsection-heading"><h3>Staff Awards</h3><p>Recognition earned by Bean Machine team members.</p></div>
+<div id="awardsList" class="awards-grid"></div>
+
+<div class="subsection-heading"><h3>Employee of the Month History</h3></div>
+<div id="eomHistoryStaff" class="history-grid"></div>
 
 </div>
 
@@ -1422,6 +1463,7 @@ Submit Staff Feedback
 <button data-tab="reviews">Reviews</button>
 <button data-tab="content">Content</button>
 <button data-tab="employees">Employees</button>
+<button data-tab="priority">Priority Club</button>
 <button data-tab="settings">Settings</button>
 
 </div>
