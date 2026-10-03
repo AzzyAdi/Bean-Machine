@@ -1256,8 +1256,12 @@ async function refreshPublicLiveData() {
         populateReviewEmployees(data.employees || []);
         renderAnnouncements(data.announcements || []);
         renderEvents(data.events || []);
+        renderAwards(data.awards || []);
+        renderPriorityOffers(data.priorityOffers || []);
         renderManagedMenu(data.menu || []);
         renderManagedGallery(data.gallery || []);
+        renderPriorityCustomers(data.priorityCustomers || []);
+        initPriorityVerification();
         return data;
     } catch (error) {
         console.warn("Bean Machine live refresh:", error);
@@ -1302,8 +1306,12 @@ async function initBeanMachineLiveSystem() {
         populateReviewEmployees(data.employees || []);
         renderAnnouncements(data.announcements || []);
         renderEvents(data.events || []);
+        renderAwards(data.awards || []);
+        renderPriorityOffers(data.priorityOffers || []);
         renderManagedMenu(data.menu || []);
         renderManagedGallery(data.gallery || []);
+        renderPriorityCustomers(data.priorityCustomers || []);
+        initPriorityVerification();
 
     } catch (error) {
 
@@ -1554,6 +1562,23 @@ function renderEvents(items) {
 
 }
 
+function renderAwards(items) {
+    const box = document.getElementById("awardsList");
+    if (!box) return;
+    box.innerHTML = (items || []).length ? items.map(item => `
+      <article class="award-card">
+        <img src="${bmEscape(bmImageUrl(bmField(item,"Photo","photo")))}" alt="${bmEscape(bmField(item,"Name","name")||"Staff member")}">
+        <div><span class="update-date">${bmEscape(bmField(item,"Date","date"))}</span><h3>${bmEscape(bmField(item,"Award","award"))}</h3><strong>${bmEscape(bmField(item,"Name","name"))}</strong><small>${bmEscape(bmField(item,"Rank","rank"))}</small><p>${bmEscape(bmField(item,"Description","description"))}</p></div>
+      </article>`).join("") : '<div class="live-empty">Staff awards will appear here.</div>';
+}
+
+function renderPriorityOffers(items) {
+    const box = document.getElementById("priorityOffersList");
+    if (!box) return;
+    box.innerHTML = (items || []).length ? items.map(item => `
+      <article class="offer-card"><span class="priority-tier">${bmEscape(bmField(item,"Tier","tier")||"All")}</span><h3>${bmEscape(bmField(item,"Title","title"))}</h3><p>${bmEscape(bmField(item,"Description","description"))}</p>${bmField(item,"Discount","discount") ? `<strong>${bmEscape(bmField(item,"Discount","discount"))}</strong>` : ""}<small>${bmEscape(bmField(item,"Valid Until","validUntil")||"Ongoing")}</small></article>`).join("") : '<div class="live-empty">Exclusive Priority offers will appear here.</div>';
+}
+
 function renderManagedMenu(items) {
     const box = document.querySelector("#menu .menu-grid");
     if (!box) return;
@@ -1762,6 +1787,8 @@ function renderDashboardTab(tab, data, panel) {
         renderDashboardReviews(data.reviews || [], panel);
     } else if (tab === "employees") {
         renderDashboardEmployees(data.employees || [], panel);
+    } else if (tab === "priority") {
+        renderDashboardPriority(data.priorityCustomers || [], panel);
     } else if (tab === "content") {
         renderDashboardContent(data, panel);
     } else if (tab === "settings") {
@@ -1976,6 +2003,52 @@ function renderDashboardReviews(reviews, panel) {
 
     draw();
 
+}
+
+function renderPriorityCustomers(items) {
+    const box = document.getElementById("priorityCustomers");
+    if (!box) return;
+    if (!items.length) { box.innerHTML = '<div class="live-empty priority-empty"><i class="fas fa-gem"></i><h3>Priority Club is ready</h3><p>Approved priority customers will appear here.</p></div>'; return; }
+    box.innerHTML = items.map(item => {
+        const name=bmField(item,"name","Name")||"Priority Member", tier=bmField(item,"tier","Tier")||"Priority", photo=bmImageUrl(bmField(item,"photo","Photo")), offer=bmField(item,"offer","Offer")||"Exclusive Bean Machine offer", benefits=bmField(item,"benefits","Benefits"), until=bmField(item,"validUntil","Valid Until");
+        return `<article class="priority-card ${String(bmField(item,"featured","Featured")).toLowerCase()==="true"?'priority-featured':''}"><div class="priority-photo-wrap"><img src="${bmEscape(photo)}" alt="${bmEscape(name)}"><span class="priority-tier">${bmEscape(tier)}</span></div><div class="priority-card-body"><div class="priority-card-top"><h3>${bmEscape(name)}</h3><span><i class="fas fa-circle-check"></i> Verified Member</span></div><p class="priority-offer"><i class="fas fa-tag"></i> ${bmEscape(offer)}</p>${benefits ? `<p class="priority-benefits-text">${bmEscape(benefits)}</p>` : ''}<div class="priority-meta"><span><i class="fas fa-shield-halved"></i> Management approved</span><span>${until ? 'Valid until '+bmEscape(until) : 'Active membership'}</span></div></div></article>`;
+    }).join("");
+}
+
+function initPriorityVerification() {
+    const input=document.getElementById("priorityVerifyInput"), button=document.getElementById("priorityVerifyButton"), result=document.getElementById("priorityVerifyResult");
+    if(!input||!button||!result||button.dataset.bound==="1") return;
+    button.dataset.bound="1";
+    const verify=async()=>{ const code=input.value.trim(); if(!code){result.className="verify-result error";result.textContent="Enter a ticket ID.";return;} button.disabled=true; result.className="verify-result"; result.textContent="Checking..."; try { const data=await bmGet("verify_priority",{ticket:code,_t:Date.now()}); if(!data.valid){result.className="verify-result error";result.innerHTML='<i class="fas fa-circle-xmark"></i> '+bmEscape(data.message||"Ticket not found or inactive.");} else {result.className="verify-result success";result.innerHTML='<i class="fas fa-circle-check"></i> <strong>Verified:</strong> '+bmEscape(data.member.name)+' • '+bmEscape(data.member.tier)+'<br><small>'+bmEscape(data.member.offer)+' • '+bmEscape(data.member.validUntil)+'</small>';}} catch(e){result.className="verify-result error";result.textContent="Verification service is temporarily unavailable.";} finally{button.disabled=false;} };
+    button.addEventListener("click",verify); input.addEventListener("keydown",e=>{if(e.key==="Enter")verify();});
+}
+
+function renderDashboardPriority(items, panel) {
+    panel.innerHTML = `<h3>Priority Customer Club</h3>
+      <p class="dashboard-help">Add approved priority members. Their photo, tier and offer are shown publicly; management controls every entry.</p>
+      <form id="priorityForm" class="dashboard-form">
+        <input name="name" placeholder="Customer name" required>
+        <select name="tier"><option>Priority</option><option>VIP</option><option>Elite</option></select>
+        <input name="photo" placeholder="Photo URL or Google Drive link" required>
+        <input name="offer" placeholder="Special offer" required>
+        <input name="benefits" placeholder="Benefits (optional)">
+        <input name="ticketId" placeholder="BM-PRIORITY-10482" required>
+        <input name="validUntil" type="date" title="Valid until">
+        <select name="status"><option>Active</option><option>Expired</option><option>Suspended</option></select>
+        <label class="dashboard-check"><input name="featured" type="checkbox"> Feature this member</label>
+        <button type="submit">Add Priority Customer</button>
+      </form>
+      <div class="dashboard-table-wrap"><table class="dashboard-table"><thead><tr><th>Customer</th><th>Tier</th><th>Ticket</th><th>Offer</th><th>Valid Until</th><th>Action</th></tr></thead><tbody>
+      ${items.map(item => `<tr><td>${bmEscape(bmField(item,"name","Name"))}</td><td>${bmEscape(bmField(item,"tier","Tier"))}</td><td>${bmEscape(bmField(item,"ticketId","Ticket ID"))}</td><td>${bmEscape(bmField(item,"offer","Offer"))}</td><td>${bmEscape(bmField(item,"validUntil","Valid Until")||"—")}</td><td><button data-priority-row="${bmEscape(item._row)}">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+    panel.querySelector("#priorityForm").addEventListener("submit", async e => {
+      e.preventDefault(); const formData=Object.fromEntries(new FormData(e.target).entries()); formData.featured=e.target.featured.checked?"true":"false";
+      try { await bmAdminPost({action:"save_priority",pin:sessionStorage.getItem("beanMachineAdminPin"),...formData}); e.target.reset(); await refreshManagementTab("priority",panel); await refreshPublicLiveData(); }
+      catch(err){ alert(err.message || "Could not add priority customer."); }
+    });
+    panel.querySelectorAll("[data-priority-row]").forEach(btn => btn.addEventListener("click", async()=>{
+      if(!confirm("Delete this priority customer?")) return;
+      try { await bmAdminPost({action:"delete_priority",pin:sessionStorage.getItem("beanMachineAdminPin"),row:btn.dataset.priorityRow}); await refreshManagementTab("priority",panel); await refreshPublicLiveData(); } catch(err){ alert(err.message || "Could not delete priority customer."); }
+    }));
 }
 
 function renderDashboardEmployees(employees, panel) {
