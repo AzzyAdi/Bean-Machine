@@ -1222,18 +1222,31 @@ async function bmPost(payload) {
 }
 
 async function bmAdminPost(payload) {
-
     const mutationAction = payload && payload.action ? payload.action : "";
+    // Image uploads can exceed practical URL limits, so send those mutations as POST.
+    if (payload && payload.photoData) {
+        const endpoint = bmConfig().GOOGLE_APPS_SCRIPT_URL || "";
+        if (!endpoint) throw new Error("Google Apps Script URL is not configured.");
+        await fetch(endpoint, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify(payload)});
+        return {ok:true};
+    }
     const mutationPayload = { ...payload, mutationAction };
     delete mutationPayload.action;
-
     const data = await bmGet("admin_mutation", mutationPayload);
-
-    if (!data || data.ok !== true) {
-        throw new Error((data && data.error) || "Management action failed.");
-    }
-
+    if (!data || data.ok !== true) throw new Error((data && data.error) || "Management action failed.");
     return data;
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        if (!file) return resolve("");
+        if (!file.type || file.type.indexOf("image/") !== 0) return reject(new Error("Please choose an image file."));
+        if (file.size > 10 * 1024 * 1024) return reject(new Error("Please use an image under 10 MB."));
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read the image file."));
+        reader.readAsDataURL(file);
+    });
 }
 
 async function refreshManagementTab(tab, panel) {
@@ -1389,11 +1402,54 @@ function renderEmployeeOfMonth(current, history) {
     }
 
     if (historyBox) {
-        historyBox.innerHTML = (history || []).map(item => `
-
-        `).join("");
+        const rows = (history || []).filter(Boolean);
+        historyBox.innerHTML = rows.length ? rows.map(item => `
+          <article class="history-card">
+            <span>${bmEscape(formatDate(bmField(item,"Month","month")))}</span>
+            <strong>${bmEscape(bmField(item,"Name","name"))}</strong>
+            <small>${bmEscape(bmField(item,"Rank","rank"))}</small>
+            ${bmField(item,"Highlight","highlight") ? `<p>${bmEscape(bmField(item,"Highlight","highlight"))}</p>` : ""}
+          </article>
+        `).join("") : "";
+    }
+    const staffHistory = document.getElementById("eomHistoryStaff");
+    if (staffHistory) {
+        const rows = (history || []).filter(Boolean);
+        staffHistory.innerHTML = rows.length ? rows.map(item => `<article class="history-card"><span>${bmEscape(formatDate(bmField(item,"Month","month")))}</span><strong>${bmEscape(bmField(item,"Name","name"))}</strong><small>${bmEscape(bmField(item,"Rank","rank"))}</small></article>`).join("") : "";
     }
 
+}
+
+function formatDate(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    // Calendar fields are date-only values. If Apps Script serializes a Sheet
+    // date as ISO (for example 2026-09-30T18:00:00.000Z), keep the selected
+    // calendar day instead of allowing timezone conversion to change it.
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (iso) {
+        const d = new Date(Number(iso[1]), Number(iso[2])-1, Number(iso[3]));
+        return d.toLocaleDateString(undefined, {year:"numeric", month:"long", day:"numeric"});
+    }
+    if (/^\d{4}-\d{2}$/.test(raw)) {
+        const d = new Date(Number(raw.slice(0,4)), Number(raw.slice(5,7))-1, 1);
+        return d.toLocaleDateString(undefined, {month:"long", year:"numeric"});
+    }
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString(undefined, {year:"numeric", month:"long", day:"numeric"});
+}
+
+function formatTime(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    const iso = raw.match(/T(\d{2}):(\d{2})/);
+    const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+    const hh = iso ? Number(iso[1]) : m ? Number(m[1]) : null;
+    const mm = iso ? Number(iso[2]) : m ? Number(m[2]) : null;
+    if (hh === null || mm === null) return raw;
+    const d = new Date(); d.setHours(hh, mm, 0, 0);
+    return d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
 }
 
 function bmField(obj, ...keys) {
@@ -1545,8 +1601,8 @@ function renderEvents(items) {
     if (!box) return;
 
     box.innerHTML = items.length ? items.map(item => {
-        const date = bmField(item, "Date", "date");
-        const time = bmField(item, "Time", "time");
+        const date = formatDate(bmField(item, "Date", "date"));
+        const time = formatTime(bmField(item, "Time", "time"));
         const title = bmField(item, "Title", "title");
         const location = bmField(item, "Location", "location");
         const description = bmField(item, "Description", "description");
@@ -1576,7 +1632,7 @@ function renderPriorityOffers(items) {
     const box = document.getElementById("priorityOffersList");
     if (!box) return;
     box.innerHTML = (items || []).length ? items.map(item => `
-      <article class="offer-card"><span class="priority-tier">${bmEscape(bmField(item,"Tier","tier")||"All")}</span><h3>${bmEscape(bmField(item,"Title","title"))}</h3><p>${bmEscape(bmField(item,"Description","description"))}</p>${bmField(item,"Discount","discount") ? `<strong>${bmEscape(bmField(item,"Discount","discount"))}</strong>` : ""}<small>${bmEscape(bmField(item,"Valid Until","validUntil")||"Ongoing")}</small></article>`).join("") : '<div class="live-empty">Exclusive Priority offers will appear here.</div>';
+      <article class="offer-card"><span class="priority-tier">${bmEscape(bmField(item,"Tier","tier")||"All")}</span><h3>${bmEscape(bmField(item,"Title","title"))}</h3><p>${bmEscape(bmField(item,"Description","description"))}</p>${bmField(item,"Discount","discount") ? `<strong>${bmEscape(bmField(item,"Discount","discount"))}</strong>` : ""}<small>${bmEscape(formatDate(bmField(item,"Valid Until","validUntil"))||"Ongoing")}</small></article>`).join("") : '<div class="live-empty">Exclusive Priority offers will appear here.</div>';
 }
 
 function renderManagedMenu(items) {
@@ -1848,6 +1904,7 @@ function renderDashboardApplications(applications, panel) {
                             <td><span class="dashboard-status dashboard-status-${String(bmField(item, "status", "Status") || "Pending").toLowerCase()}">${bmEscape(bmField(item, "status", "Status") || "Pending")}</span></td>
                             <td>
                                 <div class="dashboard-action">
+                                    <button data-app-action="Pending" ${bmField(item, "status", "Status") === "Pending" ? "disabled" : ""}>Pending</button>
                                     <button data-app-action="Interview" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Interview" ? "disabled" : ""}>Interview</button>
                                     <button data-app-action="Accepted" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Accepted" ? "disabled" : ""}>Accept</button>
                                     <button data-app-action="Rejected" data-id="${bmEscape(item._row)}" ${bmField(item, "status", "Status") === "Rejected" ? "disabled" : ""}>Reject</button>
@@ -2008,7 +2065,7 @@ function renderDashboardReviews(reviews, panel) {
 function renderPriorityCustomers(items) {
     const box = document.getElementById("priorityCustomers");
     if (!box) return;
-    if (!items.length) { box.innerHTML = '<div class="live-empty priority-empty"><i class="fas fa-gem"></i><h3>Priority Club is ready</h3><p>Approved priority customers will appear here.</p></div>'; return; }
+    if (!items.length) { box.innerHTML = ""; return; }
     box.innerHTML = items.map(item => {
         const name=bmField(item,"name","Name")||"Priority Member", tier=bmField(item,"tier","Tier")||"Priority", photo=bmImageUrl(bmField(item,"photo","Photo")), offer=bmField(item,"offer","Offer")||"Exclusive Bean Machine offer", benefits=bmField(item,"benefits","Benefits"), until=bmField(item,"validUntil","Valid Until");
         return `<article class="priority-card ${String(bmField(item,"featured","Featured")).toLowerCase()==="true"?'priority-featured':''}"><div class="priority-photo-wrap"><img src="${bmEscape(photo)}" alt="${bmEscape(name)}"><span class="priority-tier">${bmEscape(tier)}</span></div><div class="priority-card-body"><div class="priority-card-top"><h3>${bmEscape(name)}</h3><span><i class="fas fa-circle-check"></i> Verified Member</span></div><p class="priority-offer"><i class="fas fa-tag"></i> ${bmEscape(offer)}</p>${benefits ? `<p class="priority-benefits-text">${bmEscape(benefits)}</p>` : ''}<div class="priority-meta"><span><i class="fas fa-shield-halved"></i> Management approved</span><span>${until ? 'Valid until '+bmEscape(until) : 'Active membership'}</span></div></div></article>`;
@@ -2029,7 +2086,8 @@ function renderDashboardPriority(items, panel) {
       <form id="priorityForm" class="dashboard-form">
         <input name="name" placeholder="Customer name" required>
         <select name="tier"><option>Priority</option><option>VIP</option><option>Elite</option></select>
-        <input name="photo" placeholder="Photo URL or Google Drive link" required>
+        <input name="photo" placeholder="Photo URL or Google Drive link (optional)">
+        <input name="photoFile" type="file" accept="image/*" title="Upload customer photo">
         <input name="offer" placeholder="Special offer" required>
         <input name="benefits" placeholder="Benefits (optional)">
         <input name="ticketId" placeholder="BM-PRIORITY-10482" required>
@@ -2039,10 +2097,11 @@ function renderDashboardPriority(items, panel) {
         <button type="submit">Add Priority Customer</button>
       </form>
       <div class="dashboard-table-wrap"><table class="dashboard-table"><thead><tr><th>Customer</th><th>Tier</th><th>Ticket</th><th>Offer</th><th>Valid Until</th><th>Action</th></tr></thead><tbody>
-      ${items.map(item => `<tr><td>${bmEscape(bmField(item,"name","Name"))}</td><td>${bmEscape(bmField(item,"tier","Tier"))}</td><td>${bmEscape(bmField(item,"ticketId","Ticket ID"))}</td><td>${bmEscape(bmField(item,"offer","Offer"))}</td><td>${bmEscape(bmField(item,"validUntil","Valid Until")||"—")}</td><td><button data-priority-row="${bmEscape(item._row)}">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+      ${items.map(item => `<tr><td>${bmEscape(bmField(item,"name","Name"))}</td><td>${bmEscape(bmField(item,"tier","Tier"))}</td><td>${bmEscape(bmField(item,"ticketId","Ticket ID"))}</td><td>${bmEscape(bmField(item,"offer","Offer"))}</td><td>${bmEscape(formatDate(bmField(item,"validUntil","Valid Until"))||"—")}</td><td><button data-priority-row="${bmEscape(item._row)}">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
     panel.querySelector("#priorityForm").addEventListener("submit", async e => {
       e.preventDefault(); const formData=Object.fromEntries(new FormData(e.target).entries()); formData.featured=e.target.featured.checked?"true":"false";
-      try { await bmAdminPost({action:"save_priority",pin:sessionStorage.getItem("beanMachineAdminPin"),...formData}); e.target.reset(); await refreshManagementTab("priority",panel); await refreshPublicLiveData(); }
+      const photoFile=e.target.querySelector('input[name="photoFile"]')?.files?.[0];
+      try { if(photoFile){formData.photoData=await readFileAsDataUrl(photoFile);} delete formData.photoFile; await bmAdminPost({action:"save_priority",pin:sessionStorage.getItem("beanMachineAdminPin"),...formData}); e.target.reset(); await refreshManagementTab("priority",panel); await refreshPublicLiveData(); }
       catch(err){ alert(err.message || "Could not add priority customer."); }
     });
     panel.querySelectorAll("[data-priority-row]").forEach(btn => btn.addEventListener("click", async()=>{
@@ -2059,7 +2118,8 @@ function renderDashboardEmployees(employees, panel) {
         <form id="employeeForm" class="dashboard-form">
             <input name="name" placeholder="Employee name" required>
             <input name="rank" placeholder="Rank" required>
-            <input name="photo" placeholder="Photo URL or Google Drive link" required>
+            <input name="photo" placeholder="Photo URL or Google Drive link (optional)">
+            <input name="photoFile" type="file" accept="image/*" title="Upload employee photo">
             <textarea name="bio" placeholder="Employee bio"></textarea>
             <button type="submit">Save Employee</button>
         </form>
@@ -2088,6 +2148,9 @@ function renderDashboardEmployees(employees, panel) {
         event.preventDefault();
 
         const formData = Object.fromEntries(new FormData(event.target).entries());
+        const photoFile = event.target.querySelector('input[name="photoFile"]')?.files?.[0];
+        if (photoFile) formData.photoData = await readFileAsDataUrl(photoFile);
+        delete formData.photoFile;
 
         try {
             await bmAdminPost({
@@ -2139,10 +2202,11 @@ function renderDashboardContent(data, panel) {
         <h3>Employee of the Month</h3>
 
         <form id="eomForm" class="dashboard-form">
-            <input name="month" placeholder="Month e.g. September 2026" required>
+            <input name="month" type="month" required title="Select month">
             <input name="name" placeholder="Employee name" required>
             <input name="rank" placeholder="Rank">
-            <input name="photo" placeholder="Photo URL or Google Drive link">
+            <input name="photo" placeholder="Photo URL or Google Drive link (optional)">
+            <input name="photoFile" type="file" accept="image/*" title="Upload Employee of the Month photo">
             <textarea name="message" placeholder="Award message"></textarea>
             <textarea name="highlight" placeholder="Highlight / reason"></textarea>
             <button type="submit">Set Employee of the Month</button>
@@ -2169,7 +2233,7 @@ function renderDashboardContent(data, panel) {
         <form id="announcementForm" class="dashboard-form">
             <input name="title" placeholder="Announcement title" required>
             <textarea name="message" placeholder="Announcement message" required></textarea>
-            <input name="date" placeholder="Date">
+            <input name="date" type="date" title="Select date">
             <button type="submit">Publish Announcement</button>
         </form>
 
@@ -2193,8 +2257,8 @@ function renderDashboardContent(data, panel) {
 
         <form id="eventForm" class="dashboard-form">
             <input name="title" placeholder="Event title" required>
-            <input name="date" placeholder="Date" required>
-            <input name="time" placeholder="Time">
+            <input name="date" type="date" required title="Select date">
+            <input name="time" type="time" title="Select time">
             <input name="location" placeholder="Location">
             <textarea name="description" placeholder="Description"></textarea>
             <button type="submit">Add Event</button>
@@ -2216,6 +2280,21 @@ function renderDashboardContent(data, panel) {
                 </tbody>
             </table>
         </div>
+
+        <h3 style="margin-top:30px;">Staff Awards</h3>
+        <form id="awardForm" class="dashboard-form">
+            <input name="date" type="date" required title="Select award date">
+            <input name="name" placeholder="Employee name" required>
+            <input name="rank" placeholder="Rank">
+            <input name="award" placeholder="Award name" required>
+            <input name="photo" placeholder="Photo URL or Google Drive link (optional)">
+            <input name="photoFile" type="file" accept="image/*" title="Upload award photo">
+            <textarea name="description" placeholder="Award description"></textarea>
+            <button type="submit">Add Staff Award</button>
+        </form>
+        <div class="dashboard-table-wrap"><table class="dashboard-table"><thead><tr><th>Date</th><th>Employee</th><th>Award</th><th>Action</th></tr></thead><tbody>
+        ${(data.awards || []).map(item => `<tr><td>${bmEscape(formatDate(bmField(item,"Date","date")))}</td><td>${bmEscape(bmField(item,"Name","name"))}</td><td>${bmEscape(bmField(item,"Award","award"))}</td><td><button data-content-delete="delete_award" data-id="${bmEscape(item._row)}">Delete</button></td></tr>`).join("") || '<tr><td colspan="4">No awards yet.</td></tr>'}
+        </tbody></table></div>
 
         <h3 style="margin-top:30px;">Menu Item</h3>
 
@@ -2250,6 +2329,7 @@ function renderDashboardContent(data, panel) {
     bindContentForm("eomForm", "save_eom");
     bindContentForm("announcementForm", "save_announcement");
     bindContentForm("eventForm", "save_event");
+    bindContentForm("awardForm", "save_award");
     bindContentForm("menuForm", "save_menu");
     bindContentForm("galleryForm", "save_gallery");
 
@@ -2286,6 +2366,13 @@ function bindContentForm(formId, action) {
         event.preventDefault();
 
         const values = Object.fromEntries(new FormData(form).entries());
+        const photoFile = form.querySelector('input[name="photoFile"]')?.files?.[0];
+        if (photoFile) {
+            values.photoData = await readFileAsDataUrl(photoFile);
+            delete values.photoFile;
+        } else {
+            delete values.photoFile;
+        }
 
         try {
             await bmAdminPost({
