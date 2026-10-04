@@ -192,6 +192,16 @@ function doGet(e) {
       return adminData_(e.parameter.token || e.parameter.pin || "");
     }
 
+    // Management mutations are routed through GET by the GitHub Pages dashboard.
+    // Keep this route compatible with the existing dashboard while also supporting
+    // image uploads through POST.
+    if (action === "admin_mutation") {
+      const mutation = {};
+      Object.keys(e.parameter || {}).forEach(k => mutation[k] = e.parameter[k]);
+      mutation.action = e.parameter.mutationAction || e.parameter.action;
+      return handleAdminMutation_(mutation);
+    }
+
     if (action === "verify_priority") {
       return verifyPriority_(e.parameter.ticket || "");
     }
@@ -362,11 +372,138 @@ function verifyAdmin_(pin) {
 
 }
 
+function handleAdminMutation_(data) {
+  requireAdmin_(data.pin);
+  const action = String(data.action || data.mutationAction || "");
+
+  switch (action) {
+    case "update_application": {
+      const statuses = ["Pending", "Interview", "Accepted", "Rejected"];
+      if (statuses.indexOf(String(data.status)) === -1) throw new Error("Invalid application status.");
+      updateRow_("Applications", data.row, {"Status": String(data.status)});
+      notifyApplicationStatusDetailed_(data.row, data.status);
+      return json_({ok:true});
+    }
+    case "moderate_review": {
+      const statuses = ["Approved", "Rejected", "Pending"];
+      if (statuses.indexOf(String(data.status)) === -1) throw new Error("Invalid review status.");
+      updateRow_("Reviews", data.row, {"Status": String(data.status)});
+      notifyReviewModerationDetailed_(data.row, data.status);
+      return json_({ok:true});
+    }
+    case "delete_application": deleteRow_("Applications", data.row); return json_({ok:true});
+    case "delete_review": deleteRow_("Reviews", data.row); return json_({ok:true});
+    case "delete_employee": deleteRow_("Employees", data.row); return json_({ok:true});
+    case "delete_eom": deleteRow_("EmployeeOfMonth", data.row); return json_({ok:true});
+    case "delete_announcement": deleteRow_("Announcements", data.row); return json_({ok:true});
+    case "delete_event": deleteRow_("Events", data.row); return json_({ok:true});
+    case "delete_menu": deleteRow_("Menu", data.row); return json_({ok:true});
+    case "delete_gallery": deleteRow_("Gallery", data.row); return json_({ok:true});
+    case "delete_priority": deleteRow_("PriorityCustomers", data.row); return json_({ok:true});
+    case "delete_priority_offer": deleteRow_("PriorityOffers", data.row); return json_({ok:true});
+    case "delete_award": deleteRow_("Awards", data.row); return json_({ok:true});
+    case "save_employee": {
+      const photo = resolvePhoto_(data, "employee");
+      appendRow_("Employees", [clean_(data.name), clean_(data.rank), photo, clean_(data.bio), "true"]);
+      return json_({ok:true});
+    }
+    case "save_eom": {
+      const photo = resolvePhoto_(data, "employee-of-month");
+      appendRow_("EmployeeOfMonth", [clean_(data.month || data.date), clean_(data.name), clean_(data.rank), photo, clean_(data.message), clean_(data.highlight), new Date()]);
+      notifySimple_("🏆 Employee of the Month Updated", data.name + " was selected as Employee of the Month for " + (data.month || data.date) + ".", "GENERAL");
+      return json_({ok:true});
+    }
+    case "save_announcement":
+      appendRow_("Announcements", [clean_(data.date), clean_(data.title), clean_(data.message), "true"]);
+      notifySimple_("📢 Bean Machine Announcement", data.title + "\n" + data.message, "GENERAL"); return json_({ok:true});
+    case "save_event":
+      appendRow_("Events", [clean_(data.date), clean_(data.time), clean_(data.title), clean_(data.location), clean_(data.description), "true"]);
+      notifySimple_("📅 Bean Machine Event", data.title + "\n" + data.date + " " + data.time, "GENERAL"); return json_({ok:true});
+    case "save_menu":
+      appendRow_("Menu", [clean_(data.name), clean_(data.price), clean_(data.image), clean_(data.description), "true"]); return json_({ok:true});
+    case "save_gallery":
+      appendRow_("Gallery", [clean_(data.title), clean_(data.image), "true"]); return json_({ok:true});
+    case "save_priority": {
+      const photo = resolvePhoto_(data, "priority-customer");
+      appendRow_("PriorityCustomers", [clean_(data.name), clean_(data.tier || "Priority"), photo, clean_(data.offer), clean_(data.benefits), clean_(data.ticketId), clean_(data.validUntil), clean_(data.status || "Active"), String(data.featured)==="true" ? "true" : "false", new Date()]);
+      notifySimple_("💎 Priority Customer Added", data.name + " • " + (data.tier || "Priority") + " • Ticket " + data.ticketId, "GENERAL"); return json_({ok:true});
+    }
+    case "save_priority_offer":
+      appendRow_("PriorityOffers", [clean_(data.title), clean_(data.description), clean_(data.tier || "All"), clean_(data.discount), clean_(data.validUntil), "true", new Date()]);
+      notifySimple_("💎 Bean Machine Priority Offer Published", data.title + " • " + (data.tier || "All"), "GENERAL"); return json_({ok:true});
+    case "save_award": {
+      const photo = resolvePhoto_(data, "staff-award");
+      appendRow_("Awards", [clean_(data.date), clean_(data.name), clean_(data.rank), clean_(data.award), photo, clean_(data.description), "true", new Date()]);
+      notifySimple_("🏅 Bean Machine Staff Award", data.name + " • " + data.award, "GENERAL"); return json_({ok:true});
+    }
+    case "save_settings": saveSettings_(data); return json_({ok:true});
+    default: return json_({ok:false, error:"Unknown management action: " + action});
+  }
+}
+
+function resolvePhoto_(data, prefix) {
+  const photoData = String(data.photoData || "").trim();
+  if (photoData) return saveImageData_(photoData, prefix || "bean-machine");
+  return clean_(data.photo);
+}
+
+function saveImageData_(dataUrl, prefix) {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error("Invalid image upload data.");
+  const mime = match[1].toLowerCase();
+  if (mime.indexOf("image/") !== 0) throw new Error("Please upload an image file.");
+  const bytes = Utilities.base64Decode(match[2]);
+  if (bytes.length > 10 * 1024 * 1024) throw new Error("Image is too large. Please use an image under 10 MB.");
+  let folderId = props_().getProperty("IMAGE_FOLDER_ID");
+  let folder;
+  if (folderId) {
+    try { folder = DriveApp.getFolderById(folderId); } catch (e) { folder = null; }
+  }
+  if (!folder) {
+    folder = DriveApp.createFolder("Bean Machine Website Images");
+    try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+    props_().setProperty("IMAGE_FOLDER_ID", folder.getId());
+  }
+  const ext = mime.split("/")[1].replace(/[^a-z0-9]/g, "") || "img";
+  const blob = Utilities.newBlob(bytes, mime, (prefix || "bean-machine") + "-" + Date.now() + "." + ext);
+  const file = folder.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1600";
+}
+
+function notifyApplicationStatusDetailed_(rowNumber, status) {
+  const row = readSheetObjects_("Applications").find(x => Number(x._row) === Number(rowNumber));
+  if (!row) throw new Error("Application row not found.");
+  const fields = [
+    ["Applicant", row["Name (in city)"]], ["Phone", row.Phone], ["CID", row.CID],
+    ["Discord", row["Discord Username"]], ["Family / Gang / Organization / Citizen", row["Family Name"]],
+    ["Flexible Hours", row["Flexible Hours"]], ["Follow Company Rules", row["Follow Company Rules"]],
+    ["Application Row", rowNumber]
+  ];
+  const icon = status === "Accepted" ? "✅" : status === "Rejected" ? "❌" : status === "Interview" ? "🎙️" : "🕐";
+  return notifyEmbed_(icon + " Bean Machine Application — " + status, "Management changed an application status from the Bean Machine website.", fields, status === "Accepted" ? 5763719 : status === "Rejected" ? 15548997 : 12749046, "APPLICATION_STATUS");
+}
+
+function notifyReviewModerationDetailed_(rowNumber, status) {
+  const row = readSheetObjects_("Reviews").find(x => Number(x._row) === Number(rowNumber));
+  if (!row) throw new Error("Review row not found.");
+  const fields = [
+    ["Employee", row.Employee], ["Rating", row.Rating ? row.Rating + " / 5" : "Not provided"],
+    ["Reviewer", row["Reviewer Name"]], ["Discord", row["Reviewer Discord"]],
+    ["Feedback Type", row["Feedback Type"]], ["Review Message", row.Message, false], ["Review Row", rowNumber]
+  ];
+  const icon = status === "Approved" ? "✅" : status === "Rejected" ? "❌" : "🕐";
+  return notifyEmbed_(icon + " Bean Machine Review — " + status, "Management moderated this review from the Bean Machine website.", fields, status === "Approved" ? 5763719 : status === "Rejected" ? 15548997 : 12749046, "REVIEWS");
+}
+
 function doPost(e) {
 
   try {
 
     const data = JSON.parse(e.postData.contents || "{}");
+
+    const adminActions = ["update_application","moderate_review","delete_application","delete_review","delete_employee","save_employee","delete_eom","save_eom","delete_announcement","save_announcement","delete_event","save_event","save_menu","delete_menu","save_gallery","delete_gallery","save_priority","delete_priority","save_priority_offer","delete_priority_offer","save_award","delete_award","save_settings"];
+    if (adminActions.indexOf(String(data.action || "")) !== -1) return handleAdminMutation_(data);
 
     switch (data.action || data.formType) {
 
@@ -638,28 +775,7 @@ function moderateReviewLink_(rowNumber, status, token) {
 
   sh.getRange(row, statusCol).setValue(requestedStatus);
   sh.getRange(row, tokenCol).setValue("");
-
-  const review = readSheetObjects_("Reviews").find(x => Number(x._row) === row);
-  if (review) {
-    notifyEmbed_(
-      requestedStatus === "Approved" ? "✅ Bean Machine Review Approved" : "❌ Bean Machine Review Rejected",
-      "A staff review was " + requestedStatus.toLowerCase() + " by management.",
-      [
-        ["Employee", review.Employee || "Not provided", true],
-        ["Rating", (review.Rating || "-") + " / 5", true],
-        ["Feedback Type", review["Feedback Type"] || "Not provided", true],
-        ["Reviewer", review["Reviewer Name"] || "Not provided", true],
-        ["Discord", review["Reviewer Discord"] || "Not provided", true],
-        ["Review", review.Message || "Not provided", false],
-        ["Moderation Status", requestedStatus, true],
-        ["Review Row", String(row), true]
-      ],
-      12749046,
-      "REVIEWS"
-    );
-  } else {
-    notifySimple_("⭐ Review Moderated", "Review row " + row + " was marked " + requestedStatus + ".", "REVIEWS");
-  }
+  notifySimple_("⭐ Review Moderated", "Review row " + row + " was marked " + requestedStatus + ".", "REVIEWS");
 
   return html_("<h2>Review " + requestedStatus + "</h2><p>The Bean Machine review has been updated successfully.</p>");
 }
@@ -841,46 +957,7 @@ function notifyReview_(data, token) {
     String(data.reviewType || "").toLowerCase().includes("complaint") ? "COMPLAINTS" : "REVIEWS");
 }
 
-function notifyStatusChange_(data) {
-  const row = Number(data.row);
-  const status = String(data.status || "");
-  const applications = readSheetObjects_("Applications");
-  const application = applications.find(x => Number(x._row) === row);
-
-  if (!application) {
-    return notifySimple_(
-      "📋 Bean Machine Application Status Updated",
-      "Application row: " + row + "\nNew status: " + status,
-      "APPLICATION_STATUS"
-    );
-  }
-
-  const statusInfo = {
-    Pending: { icon: "🕐", title: "Application Set to Pending", message: "This application is waiting for management review." },
-    Interview: { icon: "🎙️", title: "Application Moved to Interview", message: "The applicant has been selected for an interview." },
-    Accepted: { icon: "✅", title: "Application Accepted", message: "The applicant has been accepted by Bean Machine." },
-    Rejected: { icon: "❌", title: "Application Rejected", message: "The applicant has been rejected by Bean Machine." }
-  };
-  const info = statusInfo[status] || { icon: "📋", title: "Application Status Updated", message: "The application status was changed." };
-
-  return notifyEmbed_(
-    info.icon + " Bean Machine — " + info.title,
-    info.message + "\n\n**Application Status: " + status + "**",
-    [
-      ["Applicant", application["Name (in city)"] || "Not provided", true],
-      ["Phone", application.Phone || "Not provided", true],
-      ["CID", application.CID || "Not provided", true],
-      ["Discord Username", application["Discord Username"] || "Not provided", true],
-      ["Family / Gang / Organization / Citizen", application["Family Name"] || "Not provided", true],
-      ["Flexible Hours", application["Flexible Hours"] || "Not provided", true],
-      ["Follow Company Rules", application["Follow Company Rules"] || "Not provided", true],
-      ["Application Status", status, true],
-      ["Application Row", String(row), true]
-    ],
-    12749046,
-    "APPLICATION_STATUS"
-  );
-}
+function notifyStatusChange_(data) { return notifyApplicationStatusDetailed_(data.row, data.status); }
 
 function webhookProperty_(type) {
   const map = {
