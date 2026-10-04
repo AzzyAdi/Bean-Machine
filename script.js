@@ -1405,7 +1405,7 @@ function renderEmployeeOfMonth(current, history) {
         const rows = (history || []).filter(Boolean);
         historyBox.innerHTML = rows.length ? rows.map(item => `
           <article class="history-card">
-            <span>${bmEscape(formatDate(bmField(item,"Month","month")))}</span>
+            <span>${bmEscape(formatMonth(bmField(item,"Month","month")))}</span>
             <strong>${bmEscape(bmField(item,"Name","name"))}</strong>
             <small>${bmEscape(bmField(item,"Rank","rank"))}</small>
             ${bmField(item,"Highlight","highlight") ? `<p>${bmEscape(bmField(item,"Highlight","highlight"))}</p>` : ""}
@@ -1415,9 +1415,20 @@ function renderEmployeeOfMonth(current, history) {
     const staffHistory = document.getElementById("eomHistoryStaff");
     if (staffHistory) {
         const rows = (history || []).filter(Boolean);
-        staffHistory.innerHTML = rows.length ? rows.map(item => `<article class="history-card"><span>${bmEscape(formatDate(bmField(item,"Month","month")))}</span><strong>${bmEscape(bmField(item,"Name","name"))}</strong><small>${bmEscape(bmField(item,"Rank","rank"))}</small></article>`).join("") : "";
+        staffHistory.innerHTML = rows.length ? rows.map(item => `<article class="history-card"><span>${bmEscape(formatMonth(bmField(item,"Month","month")))}</span><strong>${bmEscape(bmField(item,"Name","name"))}</strong><small>${bmEscape(bmField(item,"Rank","rank"))}</small></article>`).join("") : "";
     }
 
+}
+
+function formatMonth(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    const m = raw.match(/^(\d{4})-(\d{2})(?:-\d{2})?(?:T|$)/);
+    if (m) {
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+        return d.toLocaleDateString(undefined, {year:"numeric", month:"long"});
+    }
+    return formatDate(raw);
 }
 
 function formatDate(value) {
@@ -1581,7 +1592,7 @@ function renderAnnouncements(items) {
     if (!box) return;
 
     box.innerHTML = items.length ? items.map(item => {
-        const date = bmField(item, "Date", "date");
+        const date = formatDate(bmField(item, "Date", "date"));
         const title = bmField(item, "Title", "title");
         const message = bmField(item, "Message", "message");
         return `
@@ -1624,7 +1635,7 @@ function renderAwards(items) {
     box.innerHTML = (items || []).length ? items.map(item => `
       <article class="award-card">
         <img src="${bmEscape(bmImageUrl(bmField(item,"Photo","photo")))}" alt="${bmEscape(bmField(item,"Name","name")||"Staff member")}">
-        <div><span class="update-date">${bmEscape(bmField(item,"Date","date"))}</span><h3>${bmEscape(bmField(item,"Award","award"))}</h3><strong>${bmEscape(bmField(item,"Name","name"))}</strong><small>${bmEscape(bmField(item,"Rank","rank"))}</small><p>${bmEscape(bmField(item,"Description","description"))}</p></div>
+        <div><span class="update-date">${bmEscape(formatDate(bmField(item,"Date","date")))}</span><h3>${bmEscape(bmField(item,"Award","award"))}</h3><strong>${bmEscape(bmField(item,"Name","name"))}</strong><small>${bmEscape(bmField(item,"Rank","rank"))}</small><p>${bmEscape(bmField(item,"Description","description"))}</p></div>
       </article>`).join("") : '<div class="live-empty">Staff awards will appear here.</div>';
 }
 
