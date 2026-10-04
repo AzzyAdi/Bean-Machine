@@ -139,13 +139,23 @@ function readSheetObjects_(sheetNameOrSheet) {
     };
 
     headers.forEach((header, i) => {
-      obj[header] = row[i];
+      obj[header] = apiValue_(row[i], header);
     });
 
     return obj;
 
   });
 
+}
+
+function apiValue_(value, header) {
+  if (!(value instanceof Date)) return value;
+  const h = String(header || "");
+  const tz = sheet_().getSpreadsheetTimeZone() || Session.getScriptTimeZone() || "UTC";
+  if (h === "Month") return Utilities.formatDate(value, tz, "yyyy-MM");
+  if (h === "Date" || h === "Valid Until") return Utilities.formatDate(value, tz, "yyyy-MM-dd");
+  if (h === "Time") return Utilities.formatDate(value, tz, "HH:mm");
+  return Utilities.formatDate(value, tz, "yyyy-MM-dd HH:mm:ss");
 }
 
 function setting_(key, fallback) {
@@ -381,15 +391,15 @@ function handleAdminMutation_(data) {
       const statuses = ["Pending", "Interview", "Accepted", "Rejected"];
       if (statuses.indexOf(String(data.status)) === -1) throw new Error("Invalid application status.");
       updateRow_("Applications", data.row, {"Status": String(data.status)});
-      notifyApplicationStatusDetailed_(data.row, data.status);
-      return json_({ok:true});
+      const notification = notifyApplicationStatusDetailed_(data.row, data.status);
+      return json_({ok:true, notificationOk: notification.ok !== false, notification: notification});
     }
     case "moderate_review": {
       const statuses = ["Approved", "Rejected", "Pending"];
       if (statuses.indexOf(String(data.status)) === -1) throw new Error("Invalid review status.");
       updateRow_("Reviews", data.row, {"Status": String(data.status)});
-      notifyReviewModerationDetailed_(data.row, data.status);
-      return json_({ok:true});
+      const notification = notifyReviewModerationDetailed_(data.row, data.status);
+      return json_({ok:true, notificationOk: notification.ok !== false, notification: notification});
     }
     case "delete_application": deleteRow_("Applications", data.row); return json_({ok:true});
     case "delete_review": deleteRow_("Reviews", data.row); return json_({ok:true});
@@ -453,7 +463,7 @@ function saveImageData_(dataUrl, prefix) {
   const mime = match[1].toLowerCase();
   if (mime.indexOf("image/") !== 0) throw new Error("Please upload an image file.");
   const bytes = Utilities.base64Decode(match[2]);
-  if (bytes.length > 10 * 1024 * 1024) throw new Error("Image is too large. Please use an image under 10 MB.");
+  if (bytes.length > 8 * 1024 * 1024) throw new Error("Image is too large. Please use an image under 8 MB.");
   let folderId = props_().getProperty("IMAGE_FOLDER_ID");
   let folder;
   if (folderId) {
@@ -478,6 +488,7 @@ function notifyApplicationStatusDetailed_(rowNumber, status) {
     ["Applicant", row["Name (in city)"]], ["Phone", row.Phone], ["CID", row.CID],
     ["Discord", row["Discord Username"]], ["Family / Gang / Organization / Citizen", row["Family Name"]],
     ["Flexible Hours", row["Flexible Hours"]], ["Follow Company Rules", row["Follow Company Rules"]],
+    ["Source", row.Source || "Bean Machine Website"], ["Submitted", row.Timestamp || "Not provided"],
     ["Application Row", rowNumber]
   ];
   const icon = status === "Accepted" ? "✅" : status === "Rejected" ? "❌" : status === "Interview" ? "🎙️" : "🕐";
@@ -490,191 +501,41 @@ function notifyReviewModerationDetailed_(rowNumber, status) {
   const fields = [
     ["Employee", row.Employee], ["Rating", row.Rating ? row.Rating + " / 5" : "Not provided"],
     ["Reviewer", row["Reviewer Name"]], ["Discord", row["Reviewer Discord"]],
-    ["Feedback Type", row["Feedback Type"]], ["Review Message", row.Message, false], ["Review Row", rowNumber]
+    ["Feedback Type", row["Feedback Type"]], ["Review Message", row.Message, false],
+    ["Submitted", row.Timestamp || "Not provided"], ["Review Row", rowNumber]
   ];
   const icon = status === "Approved" ? "✅" : status === "Rejected" ? "❌" : "🕐";
   return notifyEmbed_(icon + " Bean Machine Review — " + status, "Management moderated this review from the Bean Machine website.", fields, status === "Approved" ? 5763719 : status === "Rejected" ? 15548997 : 12749046, "REVIEWS");
 }
 
 function doPost(e) {
-
   try {
+    const data = JSON.parse((e && e.postData && e.postData.contents) || "{}");
+    const action = String(data.action || data.formType || "");
 
-    const data = JSON.parse(e.postData.contents || "{}");
+    const adminActions = [
+      "update_application", "moderate_review",
+      "delete_application", "delete_review", "delete_employee", "save_employee",
+      "delete_eom", "save_eom", "delete_announcement", "save_announcement",
+      "delete_event", "save_event", "save_menu", "delete_menu",
+      "save_gallery", "delete_gallery", "save_priority", "delete_priority",
+      "save_priority_offer", "delete_priority_offer", "save_award", "delete_award",
+      "save_settings"
+    ];
 
-    const adminActions = ["update_application","moderate_review","delete_application","delete_review","delete_employee","save_employee","delete_eom","save_eom","delete_announcement","save_announcement","delete_event","save_event","save_menu","delete_menu","save_gallery","delete_gallery","save_priority","delete_priority","save_priority_offer","delete_priority_offer","save_award","delete_award","save_settings"];
-    if (adminActions.indexOf(String(data.action || "")) !== -1) return handleAdminMutation_(data);
+    if (adminActions.indexOf(action) !== -1) return handleAdminMutation_(data);
 
-    switch (data.action || data.formType) {
-
-      case "job_application":
-        return handleApplication_(data);
-
-      case "staff_review":
-        return handleReview_(data);
-
-      case "contact_message":
-        return handleContact_(data);
-
-      case "newsletter":
-        return handleNewsletter_(data);
-
-      case "update_application":
-        requireAdmin_(data.pin);
-        const applicationStatuses = ["Pending", "Interview", "Accepted", "Rejected"];
-        if (applicationStatuses.indexOf(String(data.status)) === -1) {
-          throw new Error("Invalid application status.");
-        }
-        updateRow_("Applications", data.row, {
-          "Status": String(data.status)
-        });
-        notifyStatusChange_(data);
-        return json_({ok:true});
-
-      case "moderate_review":
-        requireAdmin_(data.pin);
-        const reviewStatuses = ["Approved", "Rejected", "Pending"];
-        if (reviewStatuses.indexOf(String(data.status)) === -1) {
-          throw new Error("Invalid review status.");
-        }
-        updateRow_("Reviews", data.row, {
-          "Status": String(data.status)
-        });
-        return json_({ok:true});
-
-      case "save_employee":
-        requireAdmin_(data.pin);
-        appendRow_("Employees", [
-          clean_(data.name),
-          clean_(data.rank),
-          clean_(data.photo),
-          clean_(data.bio),
-          "true"
-        ]);
-        return json_({ok:true});
-
-      case "delete_employee":
-        requireAdmin_(data.pin);
-        deleteRow_("Employees", data.row);
-        return json_({ok:true});
-
-      case "save_eom":
-        requireAdmin_(data.pin);
-        appendRow_("EmployeeOfMonth", [
-          clean_(data.month),
-          clean_(data.name),
-          clean_(data.rank),
-          clean_(data.photo),
-          clean_(data.message),
-          clean_(data.highlight),
-          new Date()
-        ]);
-        notifySimple_("🏆 Employee of the Month Updated", data.name + " was selected as Employee of the Month for " + data.month + ".");
-        return json_({ok:true});
-
-      case "save_announcement":
-        requireAdmin_(data.pin);
-        appendRow_("Announcements", [
-          clean_(data.date || new Date()),
-          clean_(data.title),
-          clean_(data.message),
-          "true"
-        ]);
-        notifySimple_("📢 Bean Machine Announcement", data.title + "\n" + data.message);
-        return json_({ok:true});
-
-      case "save_event":
-        requireAdmin_(data.pin);
-        appendRow_("Events", [
-          clean_(data.date),
-          clean_(data.time),
-          clean_(data.title),
-          clean_(data.location),
-          clean_(data.description),
-          "true"
-        ]);
-        notifySimple_("📅 Bean Machine Event", data.title + "\n" + data.date + " " + data.time);
-        return json_({ok:true});
-
-      case "save_menu":
-        requireAdmin_(data.pin);
-        appendRow_("Menu", [
-          clean_(data.name),
-          clean_(data.price),
-          clean_(data.image),
-          clean_(data.description),
-          "true"
-        ]);
-        return json_({ok:true});
-
-      case "save_gallery":
-        requireAdmin_(data.pin);
-        appendRow_("Gallery", [
-          clean_(data.title),
-          clean_(data.image),
-          "true"
-        ]);
-        return json_({ok:true});
-
-      case "save_priority":
-        requireAdmin_(data.pin);
-        appendRow_("PriorityCustomers", [
-          clean_(data.name), clean_(data.tier || "Priority"), clean_(data.photo),
-          clean_(data.offer), clean_(data.benefits), clean_(data.ticketId),
-          clean_(data.validUntil), clean_(data.status || "Active"),
-          String(data.featured) === "true" ? "true" : "false", new Date()
-        ]);
-        notifySimple_("💎 Priority Customer Added", data.name + " • " + (data.tier || "Priority") + " • Ticket " + data.ticketId, "GENERAL");
-        return json_({ok:true});
-
-      case "delete_priority":
-        requireAdmin_(data.pin);
-        deleteRow_("PriorityCustomers", data.row);
-        return json_({ok:true});
-
-      case "save_priority_offer":
-        requireAdmin_(data.pin);
-        appendRow_("PriorityOffers", [clean_(data.title), clean_(data.description), clean_(data.tier || "All"), clean_(data.discount), clean_(data.validUntil), "true", new Date()]);
-        notifySimple_("💎 Priority Offer Published", data.title + " • " + (data.tier || "All"), "GENERAL");
-        return json_({ok:true});
-
-      case "delete_priority_offer":
-        requireAdmin_(data.pin);
-        deleteRow_("PriorityOffers", data.row);
-        return json_({ok:true});
-
-      case "save_award":
-        requireAdmin_(data.pin);
-        appendRow_("Awards", [clean_(data.date || new Date()), clean_(data.name), clean_(data.rank), clean_(data.award), clean_(data.photo), clean_(data.description), "true", new Date()]);
-        notifySimple_("🏅 Bean Machine Staff Award", data.name + " • " + data.award, "GENERAL");
-        return json_({ok:true});
-
-      case "delete_award":
-        requireAdmin_(data.pin);
-        deleteRow_("Awards", data.row);
-        return json_({ok:true});
-
-      case "save_settings":
-        requireAdmin_(data.pin);
-        saveSettings_(data);
-        return json_({ok:true});
-
-      default:
-        return json_({ok:false, error:"Unknown action."});
-
+    switch (action) {
+      case "job_application": return handleApplication_(data);
+      case "staff_review": return handleReview_(data);
+      case "contact_message": return handleContact_(data);
+      case "newsletter": return handleNewsletter_(data);
+      default: return json_({ok:false, error:"Unknown action: " + action});
     }
-
   } catch (error) {
-
     console.error(error);
-
-    return json_({
-      ok:false,
-      error:String(error)
-    });
-
+    return json_({ok:false, error:String(error && error.message ? error.message : error)});
   }
-
 }
 
 function handleApplication_(data) {
@@ -775,7 +636,7 @@ function moderateReviewLink_(rowNumber, status, token) {
 
   sh.getRange(row, statusCol).setValue(requestedStatus);
   sh.getRange(row, tokenCol).setValue("");
-  notifySimple_("⭐ Review Moderated", "Review row " + row + " was marked " + requestedStatus + ".", "REVIEWS");
+  notifyReviewModerationDetailed_(row, requestedStatus);
 
   return html_("<h2>Review " + requestedStatus + "</h2><p>The Bean Machine review has been updated successfully.</p>");
 }
